@@ -41,10 +41,10 @@ conda activate panoptic
 ```
 
 ### MaskRCNN Benchmark
-Follow the official instructions to install the [https://github.com/facebookresearch/maskrcnn-benchmark](maskrcnn-benchmark repo).
+Fix Follow the official instructions to install the [maskrcnn-benchmark repo](https://github.com/facebookresearch/maskrcnn-benchmark).
 
 ### Minkowski Engine (fork, custom)
-Follow the instructions to compile [https://github.com/xheon/MinkowskiEngine](our forked Minkowski Engine version).
+Follow the instructions to compile [our forked Minkowski Engine version](https://github.com/xheon/MinkowskiEngine).
 
 
 ```
