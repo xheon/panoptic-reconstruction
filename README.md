@@ -41,15 +41,61 @@ conda activate panoptic
 ```
 
 ### MaskRCNN Benchmark
-Fix Follow the official instructions to install the [maskrcnn-benchmark repo](https://github.com/facebookresearch/maskrcnn-benchmark).
+Follow the official instructions to install the [maskrcnn-benchmark repo](https://github.com/facebookresearch/maskrcnn-benchmark).
 
 ### Minkowski Engine (fork, custom)
-Follow the instructions to compile [our forked Minkowski Engine version](https://github.com/xheon/MinkowskiEngine).
+Follow the instructions to compile [our forked Minkowski Engine version](https://github.com/xheon/MinkowskiEngine) from source.
 
+
+### Compute library
+Finally, compile this library. 
 
 ```
 # Install library
 cd lib/csrc/
 python setup.py install
 ```
+
+## Datasets
+
+### 3D-FRONT [1]
+
+The 3D-FRONT indoor datasets consists of 6,813 furnished apartments.  
+We use Blender-Proc [2] to render photo-realistic images from individual rooms.
+We use version from 2020-06-14 of the data.
+
+#### Modifications:
+- We replace all walls and ceilings and "re-draw" them in order to close holes in the walls, e.g. empty door frames or windows.  
+  For the ceiling we use the same geometry as the floor plane to have a closed room envelope.
+- We remove following mesh categories: "WallOuter", "WallBottom", "WallTop", "Pocket", "SlabSide", "SlabBottom", "SlabTop",
+                                    "Front", "Back", "Baseboard", "Door", "Window", "BayWindow", "Hole", "WallInner", "Beam"
+- During rendering, we only render geometry which is assigned to the current room
+- We sample each individual (non-empty) room
+   - num max tries: 50,000
+   - num max samples per room: 30 
+- Camera:
+   - we fix the camera height at 0.75m and choose a forward-looking camera angle (similar to the original frames in 3D-Front)
+
+#### Structure
+- dataset_root/<scene_id>:
+  - rgb_<frame_id>.png (320x240x3, color image)
+  - depth_<frame_id>.exr (320x240x1, depth image)
+  - segmap_<frame_id>.mapped.npz (320x240x2, 2d segmentation with 0: pre-mapped semantics, 1: instances)
+  - geometry_<frame_id>.npz (256x256x256x1 distance field at 3cm voxel resolution, pre-truncated at 12 voxels, will be truncated again during data loading)
+  - segmentation_<frame_id>.mapped.npz (256x256x256x2 semantic & instance information)
+  - weighting_<frame_id>.mapped.npz (256x256x256x1 pre-computed per-voxel weights)
+  
+In total, we generate 197,352 frames. We filter out frames, which have an inconsistent number of 2D and 3D instances. 
+  
+For the 3D generation we use a custom C++ pipeline which loads the sampled camera poses, room layout mesh, and the scene objects.
+The geometry is cropped to the camera frustum, such that only geometry within the frustum contributes to the DF calculation.
+It generates 3D unsigned distance fields at 3cm resolution together with 3D semantic and instance segmentation.
+We store the 3D data as sparse grids.
+
+
+# References
+
+1. Fu et al. - 3d-Front: 3d Furnished Rooms with Layouts and Semantics
+1. Denninger et al. - BlenderProc
+
 
