@@ -4,8 +4,8 @@ import MinkowskiEngine as Me
 import torch
 import torch.nn as nn
 
-from lib import logger
-from lib.data import transforms_3d
+from lib.utils import logger
+from lib.data import transforms3d
 
 from lib.modeling import utils
 from lib.config import config
@@ -247,7 +247,7 @@ class UNetBlockOuterSparse(UNetBlock):
                     return BlockContent([None, [proxy_output, None, None], dense], processed.encoding)
 
                 # Skip connection
-                cat = sparse.sparse_cat_union(encoded, sparse_pruned)
+                cat = utils.sparse_cat_union(encoded, sparse_pruned)
 
                 # instance proxy prediction
                 proxy_instances = self.proxy_instance_128_head(cat)
@@ -419,7 +419,7 @@ class UNetBlockHybridSparse(UNetBlockOuter):
         proxy_output = [proxy_output, instance_prediction, semantic_prediction]
 
         if not config.MODEL.FRUSTUM3D.IS_LEVEL_64:
-            coordinates, _, _ = transforms_3d.Sparsify()(dense_to_sparse_mask, features=processed.data)
+            coordinates, _, _ = transforms3d.Sparsify()(dense_to_sparse_mask, features=processed.data)
             locations = coordinates.long()
 
             dense_features = processed.data

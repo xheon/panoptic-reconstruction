@@ -78,6 +78,13 @@ class FieldList:
 
 def collect(data: List[FieldList], field: str, device: str = "cuda", access_fn=None) -> torch.Tensor:
     if access_fn is None:
-        return torch.stack([t.get_field(field).to(device, non_blocking=True) for t in data], dim=0)
+        return torch.stack([conditional_to(t.get_field(field), device) for t in data], dim=0)
     else:
-        return torch.stack([access_fn(t.get_field(field)).to(device, non_blocking=True) for t in data], dim=0)
+        return torch.stack([conditional_to(access_fn(t.get_field(field)), device) for t in data], dim=0)
+
+
+def conditional_to(x: torch.Tensor, device: str = "cuda") -> torch.Tensor:
+    if device is None:
+        return x
+    else:
+        return x.to(device, non_blocking=True)

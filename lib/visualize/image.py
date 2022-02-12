@@ -3,9 +3,10 @@ from typing import Union
 
 import numpy as np
 import torch
+from matplotlib import patches
+from matplotlib.figure import Figure
 from torchvision import transforms as T
 
-from matplotlib import patches, Figure
 
 from structures import BoxList, DepthMap
 

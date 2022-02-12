@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 
 import torch
 from torch import nn
@@ -7,8 +7,8 @@ from torch.nn import functional as F
 import MinkowskiEngine as Me
 
 from lib.config import config
-from structures import DepthMap
-from structures.frustum import generate_frustum, generate_frustum_volume, compute_camera2frustum
+from lib.structures import DepthMap
+from lib.structures.frustum import generate_frustum, generate_frustum_volume, compute_camera2frustum_transform
 
 
 # TODO: clean up
@@ -18,11 +18,12 @@ class SparseProjection(nn.Module):
     def __init__(self):
         super().__init__()
 
-        if config.DATASETS.NAME == "front3d":
-            self.unproject = SunCGUnproject("cuda")
-        elif config.DATASETS.NAME == "matterport":
-            self.unproject = MatterportUnproject("cuda")
         self.truncation = config.MODEL.FRUSTUM3D.TRUNCATION
+        self.image_size = (160, 120)
+        self.depth_min = 0.4
+        self.depth_max = 6.0
+        self.voxel_size = config.MODEL.PROJECTION.VOXEL_SIZE
+        self.frustum_dimensions = torch.tensor([256, 256, 256])
 
     def forward(self, depth, features, instances, targets) -> Me.SparseTensor:
         device = depth.device
@@ -35,7 +36,8 @@ class SparseProjection(nn.Module):
         for idx in range(batch_size):
             # Get GT intrinsic matrix
             intrinsic = targets[idx].get_field("depth").intrinsic_matrix
-            camera2frustum = self.compute_camera2frustum_transform(intrinsic)
+            camera2frustum = compute_camera2frustum_transform(intrinsic.cpu(), self.image_size, self.depth_min,
+                                                              self.depth_max, self.voxel_size)
             camera2frustum = camera2frustum.to(device)
 
             intrinsic = intrinsic.to(device)

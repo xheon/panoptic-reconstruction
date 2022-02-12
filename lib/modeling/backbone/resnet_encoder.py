@@ -3,7 +3,7 @@ from typing import Dict
 import torch
 from torch import nn
 
-from modeling.utils import ModuleResult
+from lib.modeling.utils import ModuleResult
 
 
 class ResNetEncoder(nn.Module):

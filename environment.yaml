@@ -20,6 +20,8 @@ dependencies:
     - tqdm
     - pillow>=8.4.0
     - yacs>=0.1.6
+    - scipy
+    - opencv
     # - MinkowskiEngine # TODO
     # - pyMarchingCubes # TODO
     - pip:

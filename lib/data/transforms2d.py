@@ -10,7 +10,7 @@ from typing import Dict, Optional, List, Tuple
 from lib.structures.depth_map import DepthMap
 
 # TODO: clean up?
-from structures import BoxList, SegmentationMask
+from lib.structures import BoxList, SegmentationMask
 
 
 class Compose:
@@ -353,7 +353,8 @@ class SegmentationToMasks:
         self.shuffle_instance_ids = shuffle_instance_ids
 
         if ignore_classes is None:
-            self.ignore_classes = []
+            ignore_classes = []
+        self.ignore_classes = ignore_classes
 
     def __call__(self, segmentation_image: np.array):
         # Segmentation file stores at channels
@@ -369,6 +370,7 @@ class SegmentationToMasks:
 
         # Iterate over all unique instances
         enumerated_instance_indices = {}
+        instance_mapping = {}
 
         # Start at index 1 to leave space for 3D freespace 0-label
         randomized_indices = list(range(1, self.max_instances + 1))
@@ -376,7 +378,7 @@ class SegmentationToMasks:
         if self.shuffle_instance_ids:
             random.shuffle(randomized_indices)
 
-        instance_mapping = []
+        instance_ids = []
 
         # Manually count in case instances are skipped
         instance_counter = 0
@@ -414,14 +416,16 @@ class SegmentationToMasks:
             enumerated_instance_indices[int(instance_id)] = instance_counter
 
             random_index = randomized_indices[instance_counter]
-            instance_mapping.append(random_index)
+            instance_ids.append(random_index)
+            instance_mapping[int(instance_id)] = random_index
 
             instance_counter += 1
 
         bounding_boxes = BoxList(torch.tensor(bounding_boxes), self.image_size)
-        bounding_boxes.add_field("mask2d", SegmentationMask(torch.tensor(masks), self.image_size, mode="mask"))
+        bounding_boxes.add_field("mask2d", SegmentationMask(torch.from_numpy(np.array(masks)), self.image_size, mode="mask"))
         bounding_boxes.add_field("label", torch.tensor(labels, dtype=torch.int32))
-        bounding_boxes.add_field("mask2d_instance", torch.tensor(instance_mapping))
+        bounding_boxes.add_field("mask2d_instance", torch.tensor(instance_ids))
         bounding_boxes.add_field("instance_locations", enumerated_instance_indices)
+        bounding_boxes.add_field("instance_mapping", instance_mapping)
 
         return bounding_boxes

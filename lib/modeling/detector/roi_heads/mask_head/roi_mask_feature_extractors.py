@@ -56,4 +56,4 @@ def make_roi_mask_feature_extractor(in_channels):
     if config.MODEL.INSTANCE2D.FPN:
         return MaskRCNNFPNFeatureExtractor(in_channels)
     else:
-        return ResNet50Conv5ROIFeatureExtractor(in_channels)
+        return ResNet50Conv5ROIFeatureExtractor()

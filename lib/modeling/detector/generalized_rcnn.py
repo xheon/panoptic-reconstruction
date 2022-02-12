@@ -5,11 +5,14 @@ Implements the Generalized R-CNN framework
 from typing import Dict, List
 
 import torch
+from lib.metrics import intersection_over_union
+
+from lib.structures.field_list import collect
 from torch import nn
 
-from lib import config
+from lib.config import config
 from ..utils import ModuleResult
-from structures import SegmentationMask, FieldList
+from lib.structures import SegmentationMask, FieldList
 
 from .rpn import rpn
 from .roi_heads import roi_heads
@@ -34,7 +37,7 @@ class GeneralizedRCNN(nn.Module):
             self.train()
         losses = {}
 
-        bounding_boxes_gt = [target.get_field('bbox2d').to('cuda', non_blocking=True) for target in targets]
+        bounding_boxes_gt = [target.get_field("instance2d") for target in targets]
 
         features = features["blocks"][2:3]
 
@@ -115,7 +118,7 @@ class GeneralizedRCNN(nn.Module):
             for proposal_index, proposal_mask in enumerate(proposals.get_field("mask2d")):
 
                 if proposal_index not in matched_proposal_indices:
-                    overlap = metrics.iou.compute_iou(proposal_mask, target_mask.get_mask_tensor())
+                    overlap = intersection_over_union.compute_iou(proposal_mask, target_mask.get_mask_tensor())
                     if overlap > self.matching_overlap_threshold:
                         locations.append(target_location)
                         matched_proposal_indices.append(proposal_index)

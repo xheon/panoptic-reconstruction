@@ -10,7 +10,7 @@ from lib import modeling
 from lib.config import config
 from lib.modeling.backbone import UNetSparse, GeometryHeadSparse, ClassificationHeadSparse
 from lib.structures.field_list import collect
-from modeling.utils import ModuleResult
+from lib.modeling.utils import ModuleResult
 
 
 class FrustumCompletion(nn.Module):
@@ -122,7 +122,7 @@ class FrustumCompletion(nn.Module):
         weighting_mask = torch.masked_select(weighting_mask, frustum_mask)
 
         # Occupancy 64
-        occupancy_prediction = predictions[2][0]
+        occupancy_prediction = predictions[0]
         occupancy_ground_truth = collect(targets, "occupancy_64")
         occupancy_loss, occupancy_result = self.compute_occupancy_64_loss(occupancy_prediction, occupancy_ground_truth,
                                                                           frustum_mask, weighting_mask)
@@ -130,7 +130,7 @@ class FrustumCompletion(nn.Module):
         hierarchy_results.update(occupancy_result)
 
         # Instances 64
-        instance_prediction = predictions[2][1]
+        instance_prediction = predictions[1]
         instance_ground_truth = collect(targets, "instance3d_64")
         instance_loss, instance_result = self.compute_instance_64_loss(instance_prediction, instance_ground_truth,
                                                                        frustum_mask, weighting_mask)
@@ -138,7 +138,7 @@ class FrustumCompletion(nn.Module):
         hierarchy_results.update(instance_result)
 
         # Semantic 64
-        semantic_prediction = predictions[2][2]
+        semantic_prediction = predictions[2]
         semantic_ground_truth = collect(targets, "semantic3d_64")
         semantic_loss, semantic_result = self.compute_semantic_64_loss(semantic_prediction, semantic_ground_truth,
                                                                        frustum_mask, weighting_mask)
@@ -169,7 +169,7 @@ class FrustumCompletion(nn.Module):
 
     def compute_instance_64_loss(self, prediction: torch.Tensor, ground_truth: torch.Tensor,
                                  mask: torch.Tensor, weighting_mask: torch.Tensor) -> Tuple[Dict, Dict]:
-        loss = self.criterion_instances(prediction, ground_truth, reduction="none", weight=self.instance_weights)
+        loss = self.criterion_instances(prediction, ground_truth)
 
         # Only consider loss within the camera frustum
         loss = torch.masked_select(loss, mask)
@@ -189,7 +189,7 @@ class FrustumCompletion(nn.Module):
 
     def compute_semantic_64_loss(self, prediction: torch.Tensor, ground_truth: torch.Tensor,
                                   mask: torch.Tensor, weighting_mask: torch.Tensor) -> Tuple[Dict, Dict]:
-        loss = self.criterion_semantics(prediction, ground_truth, reduction="none", weight=self.semantic_weights)
+        loss = self.criterion_semantics(prediction, ground_truth)
 
         # Only consider loss within the camera frustum
         loss = torch.masked_select(loss, mask)
@@ -212,7 +212,7 @@ class FrustumCompletion(nn.Module):
         hierarchy_results = {}
 
         # occupancy at 128
-        occupancy_prediction: Me.SparseTensor = predictions[1][0]
+        occupancy_prediction: Me.SparseTensor = predictions[0]
 
         if occupancy_prediction is not None:
             occupancy_ground_truth = collect(targets, "occupancy_128")
@@ -222,20 +222,20 @@ class FrustumCompletion(nn.Module):
             hierarchy_results.update(occupancy_result)
 
         # instances at 128
-        instance_prediction: Me.SparseTensor = predictions[1][1]
+        instance_prediction: Me.SparseTensor = predictions[1]
 
         if instance_prediction is not None:
-            instance_ground_truth = collect(targets, "instances3d_128").long().squeeze(1)
+            instance_ground_truth = collect(targets, "instance3d_128").long().squeeze(1)
             instance_loss, instance_result = self.compute_instance_128_loss(instance_prediction, instance_ground_truth, weighting_mask)
 
             hierarchy_losses.update(instance_loss)
             hierarchy_results.update(instance_result)
 
         # semantics at 128
-        semantic_prediction: Me.SparseTensor = predictions[1][1]
+        semantic_prediction: Me.SparseTensor = predictions[2]
 
         if semantic_prediction is not None:
-            semantic_ground_truth = collect(targets, "semantics_128").long().squeeze(1)
+            semantic_ground_truth = collect(targets, "semantic3d_128").long().squeeze(1)
             semantic_loss, semantic_result = self.compute_semantic_128_loss(semantic_prediction, semantic_ground_truth, weighting_mask)
 
             hierarchy_losses.update(semantic_loss)
@@ -247,7 +247,8 @@ class FrustumCompletion(nn.Module):
                                    weighting_mask: torch.Tensor) -> Tuple[Dict, Dict]:
         prediction = self.mask_invalid_sparse_voxels(prediction)
         predicted_coordinates = prediction.C.long()
-        predicted_coordinates[:, 1:] = predicted_coordinates[:, 1:] // prediction.tensor_stride[0]
+        predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:],
+                                                 prediction.tensor_stride[0], rounding_mode="floor")
 
         # Get sparse GT values from dense tensor
         ground_truth_values = modeling.get_sparse_values(ground_truth, predicted_coordinates)
@@ -273,15 +274,16 @@ class FrustumCompletion(nn.Module):
                                   weighting_mask: torch.Tensor) -> Tuple[Dict, Dict]:
         prediction = self.mask_invalid_sparse_voxels(prediction)
         predicted_coordinates = prediction.C.long()
-        predicted_coordinates[:, 1:] = predicted_coordinates[:, 1:] // prediction.tensor_stride[0]
+        predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:],
+                                                 prediction.tensor_stride[0], rounding_mode="floor")
 
         # Get sparse GT values from dense tensor
         ground_truth_values = modeling.get_sparse_values(ground_truth, predicted_coordinates)
 
-        loss = self.criterion_instances(prediction.F, ground_truth_values, reduction="none")
+        loss = self.criterion_instances(prediction.F, ground_truth_values.squeeze(1))
 
         # Get sparse weighting values from dense tensor
-        weighting_values = modeling.get_sparse_values(weighting_mask, predicted_coordinates)
+        weighting_values = modeling.get_sparse_values(weighting_mask, predicted_coordinates).squeeze(1)
         loss = (loss * weighting_values)
 
         if len(loss) > 0:
@@ -289,7 +291,7 @@ class FrustumCompletion(nn.Module):
         else:
             loss_mean = 0
 
-        loss_weighted = loss_mean * config.MODEL.FRUSTUM3D.INSTANCE_128_WEIGHT
+        loss_weighted = loss_mean * config.MODEL.FRUSTUM3D.INSTANCE_WEIGHT
 
         instance_softmax = Me.MinkowskiSoftmax(dim=1)(prediction)
         instance_labels = Me.SparseTensor(torch.argmax(instance_softmax.F, 1).unsqueeze(1),
@@ -302,15 +304,16 @@ class FrustumCompletion(nn.Module):
                                   weighting_mask: torch.Tensor) -> Tuple[Dict, Dict]:
         prediction = self.mask_invalid_sparse_voxels(prediction)
         predicted_coordinates = prediction.C.long()
-        predicted_coordinates[:, 1:] = predicted_coordinates[:, 1:] // prediction.tensor_stride[0]
+        predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:],
+                                                 prediction.tensor_stride[0], rounding_mode="floor")
 
         # Get sparse GT values from dense tensor
         ground_truth_values = modeling.get_sparse_values(ground_truth, predicted_coordinates)
 
-        loss = self.criterion_semantics(prediction.F, ground_truth_values)
+        loss = self.criterion_semantics(prediction.F, ground_truth_values.squeeze())
 
         # Get sparse weighting values from dense tensor
-        weighting_values = modeling.get_sparse_values(weighting_mask, predicted_coordinates)
+        weighting_values = modeling.get_sparse_values(weighting_mask, predicted_coordinates).squeeze()
         loss = (loss * weighting_values)
 
         if len(loss) > 0:
@@ -318,7 +321,7 @@ class FrustumCompletion(nn.Module):
         else:
             loss_mean = 0
 
-        loss_weighted = loss_mean * config.MODEL.FRUSTUM3D.SEMANTIC_128_WEIGHT
+        loss_weighted = loss_mean * config.MODEL.FRUSTUM3D.SEMANTIC_WEIGHT
 
         semantic_softmax = Me.MinkowskiSoftmax(dim=1)(prediction)
         semantic_labels = Me.SparseTensor(torch.argmax(semantic_softmax.F, 1).unsqueeze(1),
@@ -331,7 +334,7 @@ class FrustumCompletion(nn.Module):
         hierarchy_losses = {}
         hierarchy_results = {}
 
-        feature_prediction: Me.SparseTensor = predictions[0]
+        feature_prediction: Me.SparseTensor = predictions
 
         if feature_prediction is not None:
             # occupancy at 256
@@ -354,12 +357,13 @@ class FrustumCompletion(nn.Module):
     def compute_occupancy_256_loss(self, prediction, ground_truth, weighting_mask) -> Tuple[Dict, Dict]:
         prediction = self.mask_invalid_sparse_voxels(prediction)
         predicted_coordinates = prediction.C.long()
-        predicted_coordinates[:, 1:] = predicted_coordinates[:, 1:] // prediction.tensor_stride[0]
+        predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:],
+                                                 prediction.tensor_stride[0], rounding_mode="floor")
 
         # Get sparse GT values from dense tensor
         ground_truth_values = modeling.get_sparse_values(ground_truth, predicted_coordinates)
 
-        loss = self.criterion_occupancy(prediction.F, ground_truth_values, reduction="none")
+        loss = self.criterion_occupancy(prediction.F, ground_truth_values)
 
         # Get sparse weighting values from dense tensor
         weighting_values = modeling.get_sparse_values(weighting_mask, predicted_coordinates)
@@ -381,7 +385,7 @@ class FrustumCompletion(nn.Module):
         hierarchy_results = {}
 
         # Surface
-        surface_prediction = predictions[0]
+        surface_prediction = self.surface_head(predictions)
         if surface_prediction is not None:
             surface_ground_truth = collect(targets, "geometry")
             surface_loss, surface_result = self.compute_surface_loss(surface_prediction, surface_ground_truth, weighting_mask)
@@ -389,18 +393,18 @@ class FrustumCompletion(nn.Module):
             hierarchy_results.update(surface_result)
 
         # Instances
-        instance_prediction = predictions[1]
+        instance_prediction = self.instance_head(predictions)
         if instance_prediction is not None:
-            instance_ground_truth: torch.LongTensor = collect(targets, "instances3d").long().squeeze(1)
-            instance_loss, instance_result = self.compute_instance_loss(instance_prediction, instance_ground_truth, weighting_mask)
+            instance_ground_truth: torch.LongTensor = collect(targets, "instance3d").long().squeeze(1)
+            instance_loss, instance_result = self.compute_instance_256_loss(instance_prediction, instance_ground_truth, weighting_mask)
             hierarchy_losses.update(instance_loss)
             hierarchy_results.update(instance_result)
 
         # Semantics
-        semantic_prediction = predictions[2]
+        semantic_prediction = self.semantic_head(predictions)
         if semantic_prediction is not None:
-            semantic_ground_truth: torch.LongTensor = collect(targets, "semantics").long().squeeze(1)
-            semantic_loss, semantic_result = self.compute_semantic_loss(semantic_prediction, semantic_ground_truth, weighting_mask)
+            semantic_ground_truth: torch.LongTensor = collect(targets, "semantic3d").long().squeeze(1)
+            semantic_loss, semantic_result = self.compute_semantic_256_loss(semantic_prediction, semantic_ground_truth, weighting_mask)
             hierarchy_losses.update(semantic_loss)
             hierarchy_results.update(semantic_result)
 
@@ -431,7 +435,7 @@ class FrustumCompletion(nn.Module):
             loss_mean = 0
 
         loss_weighted = config.MODEL.FRUSTUM3D.L1_WEIGHT * loss_mean
-        surface = Me.SparseTensor(predicted_values, predicted_coordinates, coordinate_manager=prediction.coordinate_manager)
+        surface = Me.SparseTensor(predicted_values, prediction.C, coordinate_manager=prediction.coordinate_manager)
 
         return {"geometry": loss_weighted}, {"geometry": surface}
 
@@ -439,15 +443,16 @@ class FrustumCompletion(nn.Module):
                                   weighting_mask: torch.Tensor) -> Tuple[Dict, Dict]:
         prediction = self.mask_invalid_sparse_voxels(prediction)
         predicted_coordinates = prediction.C.long()
-        predicted_coordinates[:, 1:] = predicted_coordinates[:, 1:] // prediction.tensor_stride[0]
+        predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:],
+                                                 prediction.tensor_stride[0], rounding_mode="floor")
 
         # Get sparse GT values from dense tensor
         ground_truth_values = modeling.get_sparse_values(ground_truth, predicted_coordinates)
 
-        loss = self.criterion_instances(prediction.F, ground_truth_values)
+        loss = self.criterion_instances(prediction.F, ground_truth_values.squeeze(1))
 
         # Get sparse weighting values from dense tensor
-        weighting_values = modeling.get_sparse_values(weighting_mask, predicted_coordinates)
+        weighting_values = modeling.get_sparse_values(weighting_mask, predicted_coordinates).squeeze(1)
         loss = (loss * weighting_values)
 
         if len(loss) > 0:
@@ -468,15 +473,16 @@ class FrustumCompletion(nn.Module):
                                   weighting_mask: torch.Tensor) -> Tuple[Dict, Dict]:
         prediction = self.mask_invalid_sparse_voxels(prediction)
         predicted_coordinates = prediction.C.long()
-        predicted_coordinates[:, 1:] = predicted_coordinates[:, 1:] // prediction.tensor_stride[0]
+        predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:],
+                                                 prediction.tensor_stride[0], rounding_mode="floor")
 
         # Get sparse GT values from dense tensor
         ground_truth_values = modeling.get_sparse_values(ground_truth, predicted_coordinates)
 
-        loss = self.criterion_instances(prediction.F, ground_truth_values)
+        loss = self.criterion_semantics(prediction.F, ground_truth_values.squeeze(1))
 
         # Get sparse weighting values from dense tensor
-        weighting_values = modeling.get_sparse_values(weighting_mask, predicted_coordinates)
+        weighting_values = modeling.get_sparse_values(weighting_mask, predicted_coordinates).squeeze(1)
         loss = (loss * weighting_values)
 
         if len(loss) > 0:
@@ -493,7 +499,7 @@ class FrustumCompletion(nn.Module):
 
         return {"semantic3d": loss_weighted}, {"semantic3d": semantic_softmax, "semantic3d_label": semantic_labels}
 
-    def mask_invalid_voxels(self, grid: Me.SparseTensor) -> Me.SparseTensor:
+    def mask_invalid_sparse_voxels(self, grid: Me.SparseTensor) -> Me.SparseTensor:
         # Mask out voxels which are outside of the grid
         valid_mask = (grid.C[:, 1] < self.frustum_dimensions[0] - 1) & (grid.C[:, 1] >= 0) & \
                      (grid.C[:, 2] < self.frustum_dimensions[1] - 1) & (grid.C[:, 2] >= 0) & \

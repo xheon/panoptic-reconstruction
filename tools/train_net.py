@@ -2,7 +2,10 @@ import argparse
 import os
 from pathlib import Path
 
-from lib import utils, config, logger, engine
+from lib.utils.debugger import Debugger
+
+from lib import utils, logger, engine
+from lib.config import config
 
 
 def main() -> None:
@@ -49,4 +52,5 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    # Debugger()
     main()

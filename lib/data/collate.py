@@ -8,6 +8,6 @@ class BatchCollator:
         if len(transposed_batch) == 0:
             return "error", None
         else:
-            targets = transposed_batch[0]
-            img_ids = transposed_batch[1]
+            img_ids = transposed_batch[0]
+            targets = transposed_batch[1]
         return img_ids, targets

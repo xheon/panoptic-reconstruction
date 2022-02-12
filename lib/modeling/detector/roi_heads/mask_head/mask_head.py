@@ -6,7 +6,7 @@ from torch import nn
 
 from lib.structures.bounding_box import BoxList
 from lib.config import config
-from modeling.utils import ModuleResult
+from lib.modeling.utils import ModuleResult
 
 from .roi_mask_feature_extractors import make_roi_mask_feature_extractor
 from .roi_mask_predictors import make_roi_mask_predictor

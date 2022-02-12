@@ -1,17 +1,19 @@
 import os
 import random
 from pathlib import Path
-from typing import Dict, Union, List
+from typing import Dict, Union, List, Tuple
 
 import numpy as np
 import torch.utils.data
 from PIL import Image
 import pyexr
 
-from lib import data, config
+from lib import data
 from lib.data import transforms2d as t2d
 from lib.data import transforms3d as t3d
 from lib.structures import FieldList
+from lib.config import config
+from lib.utils.intrinsics import adjust_intrinsic
 
 _imagenet_stats = {'mean': [0.485, 0.456, 0.406], 'std': [0.229, 0.224, 0.225]}
 
@@ -32,11 +34,13 @@ class Front3D(torch.utils.data.Dataset):
 
         # Fields defines which data should be loaded
         if fields is None:
-            self.fields = fields
+            fields = []
+
+        self.fields = fields
 
         self.image_size = (320, 240)
         self.depth_image_size = (160, 120)
-        self.intrinsic = config.MODEL.PROJECTION.INTRINSIC
+        self.intrinsic = self.prepare_intrinsic()
         self.voxel_size = config.MODEL.PROJECTION.VOXEL_SIZE
         self.depth_min = config.MODEL.PROJECTION.DEPTH_MIN
         self.depth_max = config.MODEL.PROJECTION.DEPTH_MAX
@@ -50,7 +54,7 @@ class Front3D(torch.utils.data.Dataset):
 
         self.transforms: Dict = self.define_transformations()
 
-    def __getitem__(self, index) -> FieldList:
+    def __getitem__(self, index) -> Tuple[str, FieldList]:
         sample_path = self.samples[index]
         scene_id = sample_path.split("/")[0]
         image_id = sample_path.split("/")[1]
@@ -71,15 +75,15 @@ class Front3D(torch.utils.data.Dataset):
             sample.add_field("depth", depth)
 
         if "instance2d" in self.fields:
-            segmentation2d = np.load(self.dataset_root_path / scene_id / f"segmap_{image_id}.mapped.npz")
+            segmentation2d = np.load(self.dataset_root_path / scene_id / f"segmap_{image_id}.mapped.npz")["data"]
             instance2d = self.transforms["instance2d"](segmentation2d)
             sample.add_field("instance2d", instance2d)
 
         # 3D data
         needs_weighting = False
         if "geometry" in self.fields:
-            geometry_path = self.dataset_root_path / scene_id / f"geometry_{image_id}.df"
-            geometry = data.read_sparse_distance_field_to_dense(geometry_path, 12)
+            geometry_path = self.dataset_root_path / scene_id / f"geometry_{image_id}.npz"
+            geometry = np.load(geometry_path)["data"]
             geometry = self.transforms["geometry"](geometry)
 
             # process hierarchy
@@ -96,8 +100,8 @@ class Front3D(torch.utils.data.Dataset):
             needs_weighting = True
 
         if "semantic3d" or "instance3d" in self.fields:
-            segmentation3d_path = self.dataset_root_path / scene_id / f"segmentation_{image_id}.mapped.sem"
-            semantic3d, instance3d = data.read_sparse_segmentation_to_dense(segmentation3d_path, 1000, 0)
+            segmentation3d_path = self.dataset_root_path / scene_id / f"segmentation_{image_id}.mapped.npz"
+            semantic3d, instance3d = np.load(segmentation3d_path)["data"]
             needs_weighting = True
 
             if "semantic3d" in self.fields:
@@ -105,30 +109,30 @@ class Front3D(torch.utils.data.Dataset):
                 sample.add_field("semantic3d", semantic3d)
 
                 # process semantic3d hierarchy
-                sample.add_field("semantic3d_128", self.transforms["segmentation3d_128"](semantic3d))
                 sample.add_field("semantic3d_64", self.transforms["segmentation3d_64"](semantic3d))
+                sample.add_field("semantic3d_128", self.transforms["segmentation3d_128"](semantic3d))
 
             if "instance3d" in self.fields:
                 # Ensure consistent instance id shuffle between 2D and 3D instances
-                instance_mapping = sample.get_field("instance2d").get_field("instance_locations")
-                instance3d = self.transforms["instance3d"](instance3d, {"mapping": instance_mapping})
+                instance_mapping = sample.get_field("instance2d").get_field("instance_mapping")
+                instance3d = self.transforms["instance3d"](instance3d, mapping=instance_mapping)
                 sample.add_field("instance3d", instance3d)
 
                 # process instance3d hierarchy
-                sample.add_field("instance3d_128", self.transforms["segmentation3d_128"](instance3d))
                 sample.add_field("instance3d_64", self.transforms["segmentation3d_64"](instance3d))
+                sample.add_field("instance3d_128", self.transforms["segmentation3d_128"](instance3d))
 
         if needs_weighting:
-            weighting_path = self.dataset_root_path / scene_id / f"weighting_{image_id}.df"
-            weighting, _ = data.read_sparse_distance_field_to_dense(weighting_path, 1.0)
-            weighting = self.transforms["weighting"](weighting)
+            weighting_path = self.dataset_root_path / scene_id / f"weighting_{image_id}.npz"
+            weighting = np.load(weighting_path)["data"]
+            weighting = self.transforms["weighting3d"](weighting)
             sample.add_field("weighting3d", weighting)
 
             # Process weighting mask hierarchy
+            sample.add_field("weighting3d_64", self.transforms["weighting3d_64"](weighting))
             sample.add_field("weighting3d_128", self.transforms["weighting3d_128"](weighting))
-            sample.add_field("weighting3d_64", self.transforms["weighting3d_128"](weighting))
 
-        return sample
+        return sample_path, sample
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -144,7 +148,7 @@ class Front3D(torch.utils.data.Dataset):
 
     def load_frustum_mask(self) -> torch.Tensor:
         mask_path = self.dataset_root_path / "frustum_mask.npz"
-        mask = data.read_sparse_distance_field_to_dense(mask_path, 0.0)
+        mask = np.load(str(mask_path))["mask"]
         mask = torch.from_numpy(mask).bool()
 
         return mask
@@ -179,19 +183,26 @@ class Front3D(torch.utils.data.Dataset):
 
         transforms["geometry_truncate"] = t3d.ToTDF(truncation=self.truncation)
 
-        transforms["occupancy_64"] = t3d.Compose([t3d.ResizeTrilinear(0.25), t3d.ToBinaryMask(8)])
-        transforms["occupancy_128"] = t3d.Compose([t3d.ResizeTrilinear(0.5), t3d.ToBinaryMask(6)])
-        transforms["occupancy_256"] = t3d.ToBinaryMask(self.truncation)
+        transforms["occupancy_64"] = t3d.Compose([t3d.ResizeTrilinear(0.25), t3d.ToBinaryMask(8), t3d.ToTensor(dtype=torch.float)])
+        transforms["occupancy_128"] = t3d.Compose([t3d.ResizeTrilinear(0.5), t3d.ToBinaryMask(6), t3d.ToTensor(dtype=torch.float)])
+        transforms["occupancy_256"] = t3d.Compose([t3d.ToBinaryMask(self.truncation), t3d.ToTensor(dtype=torch.float)])
 
+        transforms["weighting3d"] = t3d.Compose([t3d.ToTensor(dtype=torch.float), t3d.Unsqueeze(0)])
         transforms["weighting3d_64"] = t3d.ResizeTrilinear(0.25)
         transforms["weighting3d_128"] = t3d.ResizeTrilinear(0.5)
 
-        transforms["semantic3d"] = t3d.Compose([t3d.ToTensor(dtype=torch.int), t3d.Unsqueeze(0)])
+        transforms["semantic3d"] = t3d.Compose([t3d.ToTensor(dtype=torch.long)])
 
-        transforms["instance3d"] = t3d.Compose([t3d.ToTensor(dtype=torch.int), t3d.Unsqueeze(0),
-                                                t3d.Mapping(mapping={}, ignore_values=[0])])
+        transforms["instance3d"] = t3d.Compose([t3d.ToTensor(dtype=torch.long), t3d.Mapping(mapping={}, ignore_values=[0])])
 
         transforms["segmentation3d_64"] = t3d.Compose([t3d.ResizeMax(8, 4, 2)])
         transforms["segmentation3d_128"] = t3d.Compose([t3d.ResizeMax(4, 2, 1)])
 
         return transforms
+
+    def prepare_intrinsic(self) -> torch.Tensor:
+        intrinsic = np.array(config.MODEL.PROJECTION.INTRINSIC).reshape((4, 4))
+        intrinsic_adjusted = adjust_intrinsic(intrinsic, self.image_size, self.depth_image_size)
+        intrinsic_adjusted = torch.from_numpy(intrinsic_adjusted).float()
+
+        return intrinsic_adjusted

@@ -1,7 +1,7 @@
 import torch
 from typing import Tuple, Dict, List
 
-from lib.data.evaluations.iou import compute_iou
+from lib.metrics.intersection_over_union import compute_iou
 from lib.metrics import MaskedScalar
 
 

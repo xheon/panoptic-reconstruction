@@ -3,6 +3,7 @@ from collections import OrderedDict
 from pathlib import Path
 
 import torch
+from lib.structures.field_list import collect
 
 from lib import utils, logger, config, modeling, solver, data
 
@@ -27,7 +28,7 @@ class Trainer:
         device = torch.device(config.MODEL.DEVICE)
         self.model.to(device, non_blocking=True)
 
-        self.model.log_info()
+        self.model.log_model_info()
         self.model.fix_weights()
 
         # Setup optimizer, scheduler, checkpointer
@@ -35,9 +36,9 @@ class Trainer:
                                           betas=(config.SOLVER.BETA_1, config.SOLVER.BETA_2),
                                           weight_decay=config.SOLVER.WEIGHT_DECAY)
         self.scheduler = solver.WarmupMultiStepLR(self.optimizer, config.SOLVER.STEPS, config.SOLVER.GAMMA,
-                                                  warmup_factor=config.SOLVER.WARMUP_FACTOR,
-                                                  warmup_iters=config.SOLVER.WARMUP_ITERS,
-                                                  warmup_method=config.SOLVER.WARMUP_METHOD)
+                                                  warmup_factor=1,
+                                                  warmup_iters=0,
+                                                  warmup_method="linear")
 
         output_path = Path(config.OUTPUT_DIR)
         self.checkpointer = utils.DetectronCheckpointer(self.model, self.optimizer, self.scheduler, output_path)
@@ -75,7 +76,7 @@ class Trainer:
             data_time = time.time() - iteration_end
 
             # Get input images
-            images = targets.collect("color")
+            images = collect(targets, "color")
 
             # Pass through model
             losses, results = self.model(images, targets)

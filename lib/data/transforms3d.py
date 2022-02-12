@@ -246,10 +246,10 @@ class ResizeMax:
         while volume.dim() < 5:
             volume.unsqueeze_(0)
 
-        volume = volume.to(torch.float)
+        volume = volume.type(torch.float)
 
         resized = F.max_pool3d(volume, self.kernel_size, self.stride, self.padding)
-        resized = resized.to(old_dtype)
+        resized = resized.type(old_dtype)
 
         while resized.dim() > old_dim:
             resized.squeeze_(0)
@@ -393,7 +393,9 @@ class Mapping:
         self.default_value = default_value
 
         if ignore_values is None:
-            self.ignore_values = []
+            ignore_values = []
+
+        self.ignore_values = ignore_values
 
     def __call__(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         mapped = torch.full_like(x, self.default_value)

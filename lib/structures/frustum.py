@@ -1,5 +1,8 @@
 import math
+from typing import Tuple
+
 import numpy as np
+import torch
 
 
 def frustum2planes(frustum):
@@ -108,3 +111,12 @@ def generate_frustum_volume(frustum, voxel_size):
                                [0, 0, 0, 1.0]])
 
     return (dim_x, dim_y, dim_z), camera2frustum
+
+
+def compute_camera2frustum_transform(intrinsic: torch.Tensor, image_size: Tuple, depth_min: float, depth_max: float,
+                                     voxel_size: float) -> torch.Tensor:
+    frustum = generate_frustum(image_size, torch.inverse(intrinsic), depth_min, depth_max)
+    _, camera2frustum = generate_frustum_volume(frustum, voxel_size)
+    camera2frustum = torch.from_numpy(camera2frustum).float()
+
+    return camera2frustum

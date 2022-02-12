@@ -4,11 +4,12 @@ from typing import Dict, List
 import torch
 from torch import nn
 
-import modeling.utils
-from lib import config, logger, utils, modeling
+from lib import utils, modeling
 from lib.modeling import backbone, depth, detector, projection, frustum
-from modeling.utils import ModuleResult
-from structures import FieldList
+from lib.modeling.utils import ModuleResult
+from lib.structures import FieldList
+from lib.utils import logger
+from lib.config import config
 
 
 class PanopticReconstruction(nn.Module):
@@ -26,7 +27,7 @@ class PanopticReconstruction(nn.Module):
 
         # 3D modules
         self.frustum3d: nn.Module = frustum.FrustumCompletion()
-        self.postprocess: nn.Module = frustum.PostProcess()
+        self.postprocess: nn.Module = frustum.PostProcess()  # TODO: pass thing and stuff classes
         
         # Define hierarchical training status
         self.training_stages = OrderedDict([("LEVEL-64", config.MODEL.FRUSTUM3D.IS_LEVEL_64),
@@ -34,7 +35,7 @@ class PanopticReconstruction(nn.Module):
                                            ("LEVEL-256", config.MODEL.FRUSTUM3D.IS_LEVEL_256),
                                            ("FULL", True)])
 
-    def forward(self, images: torch.Tensor, targets: List[FieldList], is_validate=False) -> modeling.utils.ModuleResult:
+    def forward(self, images: torch.Tensor, targets: List[FieldList], is_validate=False) -> ModuleResult:
         losses = {}
         results = {}
 
@@ -63,8 +64,9 @@ class PanopticReconstruction(nn.Module):
         losses.update({"frustum": frustum_losses})
         results.update({"frustum": frustum_results})
 
-        _, panoptic_results = self.postprocess(instance_results, frustum_results)
-        results.update({"panoptic": panoptic_results})
+        if self.get_current_training_stage() == "FULL":
+            _, panoptic_results = self.postprocess(instance_results, frustum_results)
+            results.update({"panoptic": panoptic_results})
 
         return losses, results
 
@@ -100,13 +102,13 @@ class PanopticReconstruction(nn.Module):
         if config.MODEL.FIX2D:
             self.encoder2d.eval()
 
-            if config.MDOEL.DEPTH2D.USE:
+            if config.MODEL.DEPTH2D.USE:
                 self.depth2d.eval()
 
             if config.MODEL.INSTANCE2D.USE:
                 self.instance2d.eval()
 
-        if config.MODEL.FRUSUTM3D.FIX:
+        if config.MODEL.FRUSTUM3D.FIX:
             self.frustum3d.eval()
 
         if config.MODEL.DEPTH2D.FIX:

@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image
 from matplotlib import pyplot as plt
 
-from lib.utils.vis3d import write_pointcloud, write_pointcloud_with_normals, write_pointcloud_with_colors
+from lib.visualize.pointcloud import write_pointcloud
 
 
 class DepthMap(object):
@@ -39,12 +39,7 @@ class DepthMap(object):
     def to_pointcloud_with_colors(self, colors, filename):
         pointcloud, coords = self.compute_pointcloud()
         color_values = colors[coords[:, 0], coords[:, 1]]
-        write_pointcloud_with_colors(pointcloud, color_values, filename)
-
-    def to_normal(self, filename):
-        normal = self.compute_normal().reshape(3, -1).t()
-        pointcloud, _ = self.compute_pointcloud()
-        write_pointcloud_with_normals(pointcloud, normal, filename)
+        write_pointcloud(pointcloud, color_values, filename)
 
     def compute_pointcloud(self):
         coords2d = self.depth_map.nonzero(as_tuple=False)

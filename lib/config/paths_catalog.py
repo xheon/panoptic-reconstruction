@@ -30,7 +30,7 @@ class DatasetCatalog:
         # ------------------------------------------------------------------
         "Front3D_Sample": {
             "file_list_path": "resources/front3d/sample.txt",
-            "dataset_root_path": "data/front3d-sample/",
+            "dataset_root_path": "data/",
             "factory": "Front3D"
         },
 

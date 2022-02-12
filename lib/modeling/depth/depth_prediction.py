@@ -5,9 +5,9 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from lib import config
+from lib.config import config
 from lib.layers import FrozenBatchNorm2d
-from structures import DepthMap
+from lib.structures import DepthMap
 from .sobel import Sobel
 from ..utils import ModuleResult
 
@@ -40,44 +40,48 @@ class DepthPrediction(nn.Module):
     def forward(self, features, depth_target) -> ModuleResult:
         depth_pred, depth_feature = self.model(features)
         depth_return = [DepthMap(p_[0].cpu(), t_.get_intrinsic()) for p_, t_ in zip(depth_pred, depth_target)]
+        depth_target = torch.stack([target.get_tensor() for target in depth_target]).float().to(config.MODEL.DEVICE).unsqueeze(1)
 
-        # Mask invalid depth pixels
-        valid_masks = torch.stack([(depth.depth_map != 0.0).bool() for depth in depth_target], dim=0)
-        valid_masks.unsqueeze_(1)
-
-        depth_target = torch.stack([target.get_tensor() for target in depth_target]).float().to(
-            config.MODEL.DEVICE).unsqueeze(1)
-        grad_target = self.get_gradient(depth_target)
-        grad_pred = self.get_gradient(depth_pred)
-
-        grad_target_dx = grad_target[:, 0, :, :].contiguous().view_as(depth_target)
-        grad_target_dy = grad_target[:, 1, :, :].contiguous().view_as(depth_target)
-        grad_pred_dx = grad_pred[:, 0, :, :].contiguous().view_as(depth_target)
-        grad_pred_dy = grad_pred[:, 1, :, :].contiguous().view_as(depth_target)
-
-        ones = torch.ones(depth_target.size(0), 1, depth_target.size(2), depth_target.size(3)).float().to(
-            config.MODEL.DEVICE)
-        normal_target = torch.cat((-grad_target_dx, -grad_target_dy, ones), 1)
-        normal_pred = torch.cat((-grad_pred_dx, -grad_pred_dy, ones), 1)
-
-        loss_depth = torch.log(torch.abs(depth_target - depth_pred) + 0.5)[valid_masks].mean()
-        loss_dx = torch.log(torch.abs(grad_target_dx - grad_pred_dx) + 0.5)[valid_masks].mean()
-        loss_dy = torch.log(torch.abs(grad_target_dy - grad_pred_dy) + 0.5)[valid_masks].mean()
-        loss_gradient = loss_dx + loss_dy
-        loss_normal = torch.abs(1 - self.cos_loss(normal_pred, normal_target))[valid_masks.squeeze(1)].mean()
-
-        loss_weight = config.MODEL.DEPTH2D.LOSS_WEIGHT
-
-        losses = {
-            "depth": loss_weight * loss_depth,
-            "normal": loss_weight * loss_normal,
-            "gradient": loss_weight * loss_gradient
-        }
         results = {
             "prediction": depth_pred,
             "return": depth_return,
             "features": depth_feature
         }
+
+        losses = {}
+
+        if self.training:
+
+            # Mask invalid depth pixels
+            valid_masks = torch.stack([(depth.depth_map != 0.0).bool() for depth in depth_target], dim=0)
+            valid_masks.unsqueeze_(1)
+
+            grad_target = self.get_gradient(depth_target)
+            grad_pred = self.get_gradient(depth_pred)
+
+            grad_target_dx = grad_target[:, 0, :, :].contiguous().view_as(depth_target)
+            grad_target_dy = grad_target[:, 1, :, :].contiguous().view_as(depth_target)
+            grad_pred_dx = grad_pred[:, 0, :, :].contiguous().view_as(depth_target)
+            grad_pred_dy = grad_pred[:, 1, :, :].contiguous().view_as(depth_target)
+
+            ones = torch.ones(depth_target.size(0), 1, depth_target.size(2), depth_target.size(3)).float().to(
+                config.MODEL.DEVICE)
+            normal_target = torch.cat((-grad_target_dx, -grad_target_dy, ones), 1)
+            normal_pred = torch.cat((-grad_pred_dx, -grad_pred_dy, ones), 1)
+
+            loss_depth = torch.log(torch.abs(depth_target - depth_pred) + 0.5)[valid_masks].mean()
+            loss_dx = torch.log(torch.abs(grad_target_dx - grad_pred_dx) + 0.5)[valid_masks].mean()
+            loss_dy = torch.log(torch.abs(grad_target_dy - grad_pred_dy) + 0.5)[valid_masks].mean()
+            loss_gradient = loss_dx + loss_dy
+            loss_normal = torch.abs(1 - self.cos_loss(normal_pred, normal_target))[valid_masks.squeeze(1)].mean()
+
+            loss_weight = config.MODEL.DEPTH2D.LOSS_WEIGHT
+
+            losses = {
+                "depth": loss_weight * loss_depth,
+                "normal": loss_weight * loss_normal,
+                "gradient": loss_weight * loss_gradient
+            }
 
         return losses, results
 

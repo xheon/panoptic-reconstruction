@@ -2,7 +2,7 @@ import math
 from torch import nn
 import torch.utils.model_zoo as model_zoo
 from lib import layers as ll
-from lib import config
+from lib.config import config
 
 
 __all__ = ['ResNet', 'resnet18','resnet34', 'resnet50', 'resnet101']
