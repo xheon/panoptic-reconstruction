@@ -50,7 +50,6 @@ Follow the official instructions to install the [maskrcnn-benchmark repo](https:
 ### Minkowski Engine (fork, custom)
 Follow the instructions to compile [our forked Minkowski Engine version](https://github.com/xheon/MinkowskiEngine) from source.
 
-
 ### Compute library
 Finally, compile this library. 
 
@@ -59,6 +58,10 @@ Finally, compile this library.
 cd lib/csrc/
 python setup.py install
 ```
+
+## Inference
+To run the method on a 3D-Front sample run `python tools/test_nest_single_image.py` with the pre-trained checkpoint.
+
 
 ## Datasets
 
