@@ -9,7 +9,7 @@ import marching_cubes as mc
 from . import io, utils
 
 
-def write_distance_field(distance_field: Union[np.array, torch.Tensor], labels: Optional[np.array, torch.Tensor],
+def write_distance_field(distance_field: Union[np.array, torch.Tensor], labels: Optional[Union[np.array, torch.Tensor]],
                          output_file: os.PathLike, iso_value: float = 1.0, truncation: float = 3.0,
                          color_palette=None) -> None:
     if isinstance(distance_field, torch.Tensor):

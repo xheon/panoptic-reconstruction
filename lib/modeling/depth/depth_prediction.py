@@ -85,7 +85,7 @@ class DepthPrediction(nn.Module):
 
         return losses, results
 
-    def test(self, features):
+    def inference(self, features):
         depth_pred, depth_feature = self.model(features)
 
         return depth_pred, depth_feature

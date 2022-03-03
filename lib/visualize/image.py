@@ -7,8 +7,7 @@ from matplotlib import patches
 from matplotlib.figure import Figure
 from torchvision import transforms as T
 
-
-from structures import BoxList, DepthMap
+from lib.structures import BoxList, DepthMap
 
 from . import io, utils
 

@@ -89,6 +89,11 @@ class RPNModule(nn.Module):
 
         return boxes, {}
 
+    def inference(self, features):
+        objectness, rpn_box_regression = self.head(features)
+        anchors = self.anchor_generator([(320, 240) for _ in range(objectness[0].shape[0])], features)
+        return self._forward_test(anchors, objectness, rpn_box_regression)
+
 
 def build_rpn(in_channels):
     """

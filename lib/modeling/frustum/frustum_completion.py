@@ -517,3 +517,46 @@ class FrustumCompletion(nn.Module):
             grid = Me.MinkowskiPruning()(grid, valid_mask)
 
         return grid
+
+    def inference(self, frustum_results, frustum_mask):
+        # downscale frustum_mask
+        frustum_mask_64 = F.max_pool3d(frustum_mask.float(), kernel_size=2, stride=4).bool()
+        unet_output = self.model(frustum_results, 1, frustum_mask_64)
+        predictions = unet_output.data
+        occupancy_prediction = self.completion_256_head(predictions[0])
+        occupancy_prediction = self.mask_invalid_sparse_voxels(occupancy_prediction)
+        occupancy_prediction = Me.MinkowskiSigmoid()(occupancy_prediction)
+        predicted_coordinates = occupancy_prediction.C.long()
+        predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:],
+                                                 occupancy_prediction.tensor_stride[0], rounding_mode="floor")
+
+        occupancy_masking_threshold = config.MODEL.FRUSTUM3D.SPARSE_THRESHOLD_256
+        occupancy_mask = (occupancy_prediction.F > occupancy_masking_threshold).squeeze()
+        occupancy_prediction = Me.MinkowskiPruning()(occupancy_prediction, occupancy_mask)
+
+        surface_prediction = self.completion_head(predictions[0])
+        surface_values = torch.clamp(surface_prediction.F, 0.0, self.truncation)
+        surface_prediction = Me.SparseTensor(surface_values, surface_prediction.C,
+                                             coordinate_manager=surface_prediction.coordinate_manager)
+
+        instance_prediction = self.instance_head(occupancy_prediction)
+
+        instance_softmax = Me.MinkowskiSoftmax(dim=1)(instance_prediction)
+        instance_labels = Me.SparseTensor(torch.argmax(instance_softmax.F, 1).unsqueeze(1),
+                                          coordinate_map_key=instance_prediction.coordinate_map_key,
+                                          coordinate_manager=instance_prediction.coordinate_manager)
+
+        semantic_prediction = self.semantic_head(occupancy_prediction)
+
+        semantic_softmax = Me.MinkowskiSoftmax(dim=1)(semantic_prediction)
+        semantic_labels = Me.SparseTensor(torch.argmax(semantic_softmax.F, 1).unsqueeze(1),
+                                          coordinate_map_key=semantic_prediction.coordinate_map_key,
+                                          coordinate_manager=semantic_prediction.coordinate_manager)
+
+        frustum_result = {
+            "geometry": surface_prediction,
+            "instance3d": instance_labels,
+            "semantic3d_label": semantic_labels
+        }
+
+        return frustum_result

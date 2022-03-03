@@ -1,6 +1,7 @@
 from typing import List, Tuple
 
 import torch
+from lib.structures.field_list import FieldList
 from torch import nn
 from torch.nn import functional as F
 
@@ -132,7 +133,7 @@ class SparseProjection(nn.Module):
 
             # pad to 256,256,256
             padding_offsets = self.compute_frustum_padding(intrinsic_inverse)
-            flatten_coordinates = flatten_coordinates + padding_offsets
+            flatten_coordinates = flatten_coordinates + padding_offsets + torch.tensor([1, 1, 1]).float().to(device)
 
             flat_features = sample_features.view(num_points * num_repetition, -1)
             sparse_coordinates.append(flatten_coordinates)
@@ -158,3 +159,9 @@ class SparseProjection(nn.Module):
         padding_offsets = difference // 2
 
         return padding_offsets
+
+    def inference(self, depth, features, instances, intrinsic) -> Me.SparseTensor:
+        data = FieldList(depth.shape[2:])
+        data.add_field("depth", DepthMap(depth, intrinsic))
+
+        return self.forward(depth, features, instances, [data])

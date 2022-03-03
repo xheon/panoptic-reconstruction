@@ -4,10 +4,12 @@ from typing import Dict, List
 import torch
 from torch import nn
 
+import MinkowskiEngine as Me
+
 from lib import utils, modeling
 from lib.modeling import backbone, depth, detector, projection, frustum
 from lib.modeling.utils import ModuleResult
-from lib.structures import FieldList
+from lib.structures import FieldList, DepthMap
 from lib.utils import logger
 from lib.config import config
 
@@ -70,6 +72,37 @@ class PanopticReconstruction(nn.Module):
 
         return losses, results
 
+    def inference(self, image: torch.Tensor, intrinsic, frustum_mask):
+        results = {
+            "input": image,
+            "intrinsic": intrinsic
+        }
+
+        # Inference 2d
+        _, image_features = self.encoder2d(image)
+
+        # inference depth
+        depth_result, depth_features = self.depth2d.inference(image_features["blocks"])
+        results["depth"] = DepthMap(depth_result.squeeze(), intrinsic)
+
+        # inference maskrcnn
+        instance_result = self.instance2d.inference(image_features)
+        results["instance"] = instance_result
+
+        # inference projection
+        projection_result: Me.SparseTensor = self.projection.inference(depth_result, depth_features, instance_result, intrinsic)
+        results["projection"] = projection_result
+
+        # inference 3d
+        frustum_result = self.frustum3d.inference(projection_result, frustum_mask)
+        results["frustum"] = frustum_result
+
+        # Merge geometry, semantics & instances to panoptic output
+        _, panoptic_result = self.postprocess(instance_result, frustum_result)
+        results["panoptic"] = panoptic_result
+
+        return results
+
     def log_model_info(self) -> None:
         if config.MODEL.INSTANCE2D.USE:
             logger.info(f"number of weights in detection network: {utils.count_parameters(self.instance2d):,}")
@@ -88,12 +121,12 @@ class PanopticReconstruction(nn.Module):
         if config.MODEL.FRUSTUM3D.FIX:
             modeling.fix_weights(self, "frustum3d")
 
-    def load_state_dict(self, loaded_state_dict: Dict) -> None:
-        model_state_dict = self.state_dict()
-        loaded_state_dict = modeling.strip_prefix_if_present(loaded_state_dict, prefix="module.")
-        modeling.align_and_update_state_dicts(model_state_dict, loaded_state_dict)
-
-        super().load_state_dict(model_state_dict)
+    # def load_state_dict(self, loaded_state_dict: Dict) -> None:
+    #     model_state_dict = self.state_dict()
+    #     loaded_state_dict = modeling.strip_prefix_if_present(loaded_state_dict, prefix="module.")
+    #     modeling.align_and_update_state_dicts(model_state_dict, loaded_state_dict)
+    #
+    #     super().load_state_dict(model_state_dict)
 
     def switch_training(self) -> None:
         # set parts in training mode and keep other fixed

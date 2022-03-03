@@ -36,6 +36,19 @@ class CombinedROIHeads(nn.ModuleDict):
 
         return detections, losses
 
+    def inference(self, features, proposals):
+        x, detections, _ = self.box(features, proposals)
+
+        if config.MODEL.INSTANCE2D.ROI_HEADS.ROI_MASK_HEAD.USE:
+
+            mask_features = features
+            if self.training and config.MODEL.INSTANCE2D.ROI_HEADS.ROI_MASK_HEAD.SHARE_BOX_FEATURE_EXTRACTOR:
+                mask_features = x
+
+            detections, _ = self.mask(mask_features, detections, None)
+
+        return detections
+
 
 def build_roi_heads(in_channels):
     # individually create the heads, that will be combined together

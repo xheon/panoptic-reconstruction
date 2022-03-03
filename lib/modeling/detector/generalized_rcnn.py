@@ -127,3 +127,48 @@ class GeneralizedRCNN(nn.Module):
         matched_proposals = proposals[matched_proposal_indices]
         matched_proposals.add_field("instance_locations", torch.tensor(locations, dtype=torch.long))
         return matched_proposals
+
+    def inference(self, features):
+        features = features["blocks"][2:3]
+
+        # rpn
+        self.eval()
+        rpn_results, _ = self.rpn.inference(features)
+
+        # roi
+        detection_results = self.roi_heads.inference(features, rpn_results)
+
+        # filter by score?
+        boxes, masks, raws, locations = self.filter_detections(detection_results)
+
+        results = {"boxes": [box.bbox for box in boxes],
+                   "masks": [mask.get_mask_tensor() for mask in masks],
+                   "raw": [raw for raw in raws],
+                   "locations": [location - 1 for location in locations],
+                   "label": [box.get_field("label") for box in boxes]
+                   }
+
+        return results
+
+    def filter_detections(self, detections):
+        boxes = []
+        masks = []
+        raws = []
+        locations = []
+
+        score_threshold = config.MODEL.INSTANCE2D.RPN.SCORE_THRESH
+
+        for proposals in detections:
+            scores = proposals.get_field("scores2d")
+            mask = torch.zeros_like(scores).bool()
+            for instance_id, score in enumerate(scores):
+                if score > score_threshold:
+                    mask[instance_id] = True
+
+            filtered_proposals = proposals[mask]
+            boxes.append(filtered_proposals)
+            masks.append(SegmentationMask(filtered_proposals.get_field("mask2d"), proposals.size, mode="mask"))
+            raws.append(filtered_proposals.get_field("mask2draw"))
+            locations.append(torch.arange(len(scores)) + 1)  # instances start at 1. (0 is considered freespace)
+
+        return boxes, masks, raws, locations
