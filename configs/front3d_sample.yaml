@@ -1,6 +1,6 @@
 MODEL:
     FIX2D: True
-    PRETRAIN: "resources/panoptic_front3d.pth"
+    PRETRAIN: "resources/panoptic_front3d_v2.pth"
 
     FIXNORM: True
 

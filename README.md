@@ -1,7 +1,7 @@
 # Panoptic 3D Scene Reconstruction from a Single RGB Image
 
 
-### [Project Page](https://manuel-dahnert.com/research/panoptic-reconstruction) | [Paper](https://manuel-dahnert.com/static/dahnert2021panoptic-reconstruction.pdf) | [Poster](https://manuel-dahnert.com/static/dahnert2021panoptic-reconstruction-poster.pdf) | [Arxiv](https://arxiv.org/abs/2111.02444) | [Video](https://www.youtube.com/watch?v=YVxRNHmd5SA)
+### [Project Page](https://manuel-dahnert.com/research/panoptic-reconstruction) | [Paper](https://manuel-dahnert.com/static/e9f76636d34de100048d63007b0992b8/dahnert2021panoptic-reconstruction.pdf) | [Arxiv](https://arxiv.org/abs/2111.02444) | [Video](https://www.youtube.com/watch?v=YVxRNHmd5SA)
 
 > Panoptic 3D Scene Reconstruction from a Single RGB Image <br />
 > [Manuel Dahnert](https://manuel-dahnert.com), [Ji Hou](https://sekunde.github.io), [Matthias Nießner](https://niessnerlab.org/members/matthias_niessner/profile.html), [Angela Dai](https://www.3dunderstanding.org/team.html) <br />
@@ -59,6 +59,9 @@ cd lib/csrc/
 python setup.py install
 ```
 
+### 3D-Front pretrained model
+Download the pretrained model checkpoint for 3D-Front from https://hidrive.ionos.com/lnk/SeINI9FC and put it into the ``resource`` folder.
+
 ## Inference
 To run the method on a 3D-Front sample run `python tools/test_nest_single_image.py` with the pre-trained checkpoint.
 
@@ -70,6 +73,12 @@ To run the method on a 3D-Front sample run `python tools/test_nest_single_image.
 The 3D-FRONT indoor datasets consists of 6,813 furnished apartments.  
 We use Blender-Proc [2] to render photo-realistic images from individual rooms.
 We use version from 2020-06-14 of the data.
+
+### Download:
+We provide the preprocessed 3D-Front data here: https://hidrive.ionos.com/share/nfgac71bo2  .  
+Extract the downloaded data into ``data/front3d/`` or adjust the root data path ``lib/config/paths_catalog.py``.  
+By downloading our derived work from the original 3D-Front you accept their original Terms of Use (https://gw.alicdn.com/bao/uploaded/TB1ZJUfK.z1gK0jSZLeXXb9kVXa.pdf).
+
 
 #### Modifications:
 - We replace all walls and ceilings and "re-draw" them in order to close holes in the walls, e.g. empty door frames or windows.  
