@@ -63,12 +63,13 @@ class PostProcess(nn.Module):
 
                 # get semantic prediction
                 semantic_region = torch.masked_select(semantics, instance_mask)
-                unique_labels, semantic_counts = torch.unique(semantic_region[semantic_region != 0], return_counts=True)
+                semantic_things = semantic_region[(semantic_region != 0) & (semantic_region != 10) & (semantic_region != 11)]
 
+                unique_labels, semantic_counts = torch.unique(semantic_things, return_counts=True)
                 max_count, max_count_index = torch.max(semantic_counts, dim=0)
                 selected_label = unique_labels[max_count_index]
 
-                panoptic_semantic_mapping[panoptic_instance_id] = selected_label.int()
+                panoptic_semantic_mapping[panoptic_instance_id] = selected_label.int().item()
 
         # Merge stuff classes
         # Merge floor class

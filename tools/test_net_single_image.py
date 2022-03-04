@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 from pathlib import Path
 
@@ -110,6 +111,9 @@ def visualize_results(results: Dict[str, Any], output_path: os.PathLike) -> None
     vis.write_distance_field(surface.squeeze(), None, output_path / "mesh_geometry.ply")
     vis.write_distance_field(surface.squeeze(), instances.squeeze(), output_path / "mesh_instances.ply")
     vis.write_distance_field(surface.squeeze(), semantics.squeeze(), output_path / "mesh_semantics.ply")
+
+    with open(output_path / "semantic_classes.json", "w") as f:
+        json.dump(results["panoptic"]["panoptic_semantic_mapping"], f, indent=4)
 
     # Visualize auxiliary outputs
     vis.write_pointcloud(geometry.C[:, 1:], None, output_path / "sparse_coordinates.ply")
