@@ -47,7 +47,7 @@ def main(opts):
 
     # Open and prepare input image.
     print("Load input image...")
-    input_image = Image.open(opts.input, formats=["PNG"])
+    input_image = Image.open(opts.input)
     input_image = image_transforms(input_image)
     input_image = input_image.unsqueeze(0).to(device)
 

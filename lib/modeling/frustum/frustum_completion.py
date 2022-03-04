@@ -247,8 +247,8 @@ class FrustumCompletion(nn.Module):
                                    weighting_mask: torch.Tensor) -> Tuple[Dict, Dict]:
         prediction = self.mask_invalid_sparse_voxels(prediction)
         predicted_coordinates = prediction.C.long()
-        predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:],
-                                                 prediction.tensor_stride[0], rounding_mode="floor")
+        # predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:], prediction.tensor_stride[0], rounding_mode="floor")
+        predicted_coordinates[:, 1:] = predicted_coordinates[:, 1:] // prediction.tensor_stride[0]
 
         # Get sparse GT values from dense tensor
         ground_truth_values = modeling.get_sparse_values(ground_truth, predicted_coordinates)
@@ -274,8 +274,8 @@ class FrustumCompletion(nn.Module):
                                   weighting_mask: torch.Tensor) -> Tuple[Dict, Dict]:
         prediction = self.mask_invalid_sparse_voxels(prediction)
         predicted_coordinates = prediction.C.long()
-        predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:],
-                                                 prediction.tensor_stride[0], rounding_mode="floor")
+        # predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:], prediction.tensor_stride[0], rounding_mode="floor")
+        predicted_coordinates[:, 1:] = predicted_coordinates[:, 1:] // prediction.tensor_stride[0]
 
         # Get sparse GT values from dense tensor
         ground_truth_values = modeling.get_sparse_values(ground_truth, predicted_coordinates)
@@ -304,8 +304,8 @@ class FrustumCompletion(nn.Module):
                                   weighting_mask: torch.Tensor) -> Tuple[Dict, Dict]:
         prediction = self.mask_invalid_sparse_voxels(prediction)
         predicted_coordinates = prediction.C.long()
-        predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:],
-                                                 prediction.tensor_stride[0], rounding_mode="floor")
+        # predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:], prediction.tensor_stride[0], rounding_mode="floor")
+        predicted_coordinates[:, 1:] = predicted_coordinates[:, 1:] // prediction.tensor_stride[0]
 
         # Get sparse GT values from dense tensor
         ground_truth_values = modeling.get_sparse_values(ground_truth, predicted_coordinates)
@@ -357,8 +357,8 @@ class FrustumCompletion(nn.Module):
     def compute_occupancy_256_loss(self, prediction, ground_truth, weighting_mask) -> Tuple[Dict, Dict]:
         prediction = self.mask_invalid_sparse_voxels(prediction)
         predicted_coordinates = prediction.C.long()
-        predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:],
-                                                 prediction.tensor_stride[0], rounding_mode="floor")
+        # predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:], prediction.tensor_stride[0], rounding_mode="floor")
+        predicted_coordinates[:, 1:] = predicted_coordinates[:, 1:] // prediction.tensor_stride[0]
 
         # Get sparse GT values from dense tensor
         ground_truth_values = modeling.get_sparse_values(ground_truth, predicted_coordinates)
@@ -443,8 +443,8 @@ class FrustumCompletion(nn.Module):
                                   weighting_mask: torch.Tensor) -> Tuple[Dict, Dict]:
         prediction = self.mask_invalid_sparse_voxels(prediction)
         predicted_coordinates = prediction.C.long()
-        predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:],
-                                                 prediction.tensor_stride[0], rounding_mode="floor")
+        # predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:], prediction.tensor_stride[0], rounding_mode="floor")
+        predicted_coordinates[:, 1:] = predicted_coordinates[:, 1:] // prediction.tensor_stride[0]
 
         # Get sparse GT values from dense tensor
         ground_truth_values = modeling.get_sparse_values(ground_truth, predicted_coordinates)
@@ -473,8 +473,8 @@ class FrustumCompletion(nn.Module):
                                   weighting_mask: torch.Tensor) -> Tuple[Dict, Dict]:
         prediction = self.mask_invalid_sparse_voxels(prediction)
         predicted_coordinates = prediction.C.long()
-        predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:],
-                                                 prediction.tensor_stride[0], rounding_mode="floor")
+        # predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:], prediction.tensor_stride[0], rounding_mode="floor")
+        predicted_coordinates[:, 1:] = predicted_coordinates[:, 1:] // prediction.tensor_stride[0]
 
         # Get sparse GT values from dense tensor
         ground_truth_values = modeling.get_sparse_values(ground_truth, predicted_coordinates)
@@ -527,8 +527,8 @@ class FrustumCompletion(nn.Module):
         occupancy_prediction = self.mask_invalid_sparse_voxels(occupancy_prediction)
         occupancy_prediction = Me.MinkowskiSigmoid()(occupancy_prediction)
         predicted_coordinates = occupancy_prediction.C.long()
-        predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:],
-                                                 occupancy_prediction.tensor_stride[0], rounding_mode="floor")
+        # predicted_coordinates[:, 1:] = torch.div(predicted_coordinates[:, 1:], prediction.tensor_stride[0], rounding_mode="floor")
+        predicted_coordinates[:, 1:] = predicted_coordinates[:, 1:] // occupancy_prediction.tensor_stride[0]
 
         occupancy_masking_threshold = config.MODEL.FRUSTUM3D.SPARSE_THRESHOLD_256
         occupancy_mask = (occupancy_prediction.F > occupancy_masking_threshold).squeeze()
