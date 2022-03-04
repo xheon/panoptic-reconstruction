@@ -7,6 +7,8 @@ import torch
 from PIL import Image
 from typing import Dict, Any
 
+from lib.utils.debugger import Debugger
+
 from lib import modeling
 
 import lib.data.transforms2d as t2d
@@ -26,7 +28,8 @@ def main(opts):
     # Define model and load checkpoint.
     print("Load model...")
     model = modeling.PanopticReconstruction()
-    model.load_state_dict(torch.load(opts.model)["model"])  # load model checkpoint
+    checkpoint = torch.load(opts.model)
+    model.load_state_dict(checkpoint["model"])  # load model checkpoint
     model = model.to(device)  # move to gpu
     model.switch_test()
 
@@ -77,17 +80,17 @@ def configure_inference(opts):
 
 
 def visualize_results(results: Dict[str, Any], output_path: os.PathLike) -> None:
-    device = results["depth"].device
+    device = results["input"].device
     output_path = Path(output_path)
     output_path.mkdir(exist_ok=True, parents=True)
 
     # Visualize depth prediction
-    depth_map = DepthMap(results["depth"].squeeze(), results["intrinsic"])
-    depth_map.to_pointcloud(output_path / "/depth_prediction.ply")
+    depth_map = results["depth"]
+    depth_map.to_pointcloud(output_path / "depth_prediction.ply")
     write_depth(depth_map, output_path / "depth_map.png")
 
     # Visualize 2D detections
-    write_detection_image(results["input"], results["instance"], output_path / "detection.png")
+    # write_detection_image(results["input"], results["instance"], output_path / "detection.png")
 
     # Visualize projection
     vis.write_pointcloud(results["projection"].C[:, 1:], None, output_path / "projection.ply")
@@ -100,26 +103,33 @@ def visualize_results(results: Dict[str, Any], output_path: os.PathLike) -> None
 
     geometry = results["frustum"]["geometry"]
     surface, _, _ = geometry.dense(dense_dimensions, min_coordinates, default_value=truncation)
-    semantics, _, _ = results["panoptic"]["panoptic_semantics"].dense(dense_dimensions, min_coordinates)
-    instances, _, _ = results["panoptic"]["panoptic_instances"].dense(dense_dimensions, min_coordinates)
+    instances = results["panoptic"]["panoptic_instances"]
+    semantics = results["panoptic"]["panoptic_semantics"]
 
-    # Visualize sparse outputs
+    # Main outputs
+    vis.write_distance_field(surface.squeeze(), None, output_path / "mesh_geometry.ply")
+    vis.write_distance_field(surface.squeeze(), instances.squeeze(), output_path / "mesh_instances.ply")
+    vis.write_distance_field(surface.squeeze(), semantics.squeeze(), output_path / "mesh_semantics.ply")
+
+    # Visualize auxiliary outputs
     vis.write_pointcloud(geometry.C[:, 1:], None, output_path / "sparse_coordinates.ply")
 
-    points = (surface < iso_value).squeeze().nonzero()
-    vis.write_pointcloud(points, None, output_path / "points_geometry.ply")
-    vis.write_semantic_pointcloud(points, None, output_path / "surface_pcd.ply")
-    vis.write_semantic_pointcloud(points, None, output_path / "surface_pcd.ply")
+    surface_mask = surface.squeeze() < iso_value
+    points = surface_mask.squeeze().nonzero()
+    point_semantics = semantics[surface_mask]
+    point_instances = instances[surface_mask]
 
-    vis.write_distance_field(surface.squeeze(), None, output_path / "mesh_geometry.ply")
-    vis.write_distance_field(surface.squeeze(), semantics.squeeze(), output_path / "mesh_semantics.ply")
-    vis.write_distance_field(surface.squeeze(), instances.squeeze(), output_path / "mesh_instances.ply")
+    vis.write_pointcloud(points, None, output_path / "points_geometry.ply")
+    vis.write_semantic_pointcloud(points, point_semantics, output_path / "points_surface_semantics.ply")
+    vis.write_semantic_pointcloud(points, point_instances, output_path / "points_surface_instances.ply")
 
 
 if __name__ == '__main__':
+    Debugger("tuini15-vc21.vc.in.tum.de", 12346)
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", "-i", type=str, required=True, default="data/front3d-sample/rgb_0007.png")
-    parser.add_argument("--output", "-o", type=str, required=True, default="output/sample_0007/")
+    parser.add_argument("--input", "-i", type=str, default="data/front3d-sample/rgb_0007.png")
+    parser.add_argument("--output", "-o", type=str, default="output/sample_0007/")
     parser.add_argument("--config-file", "-c", type=str, default="configs/front3d_sample.yaml")
     parser.add_argument("--model", "-m", type=str, default="data/panoptic_front3d_v2.pth")
     parser.add_argument("opts", default=None, nargs=argparse.REMAINDER)

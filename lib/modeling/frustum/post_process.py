@@ -1,6 +1,10 @@
 from typing import List, Dict
 
 import torch
+
+import MinkowskiEngine as Me
+
+from lib.config import config
 from torch import nn
 
 from lib.modeling.utils import ModuleResult
@@ -20,73 +24,94 @@ class PostProcess(nn.Module):
         if stuff_classes is None:
             self.stuff_classes = []
 
-    def forward(self, instance_data: Dict[str, torch.Tensor], frustum_data: Dict[str, torch.Tensor]) -> ModuleResult:
+    def forward(self, instance_data: Dict[str, torch.Tensor], frustum_data: Dict[str, Me.SparseTensor]) -> ModuleResult:
+        # dense
+        device = frustum_data["instance3d"].device
+        dense_dimensions = torch.Size([1, 1] + config.MODEL.FRUSTUM3D.GRID_DIMENSIONS)
+        min_coordinates = torch.IntTensor([0, 0, 0]).to(device)
+        truncation = config.MODEL.FRUSTUM3D.TRUNCATION
+        iso_value = config.MODEL.FRUSTUM3D.ISO_VALUE
+
+        geometry, _, _ = frustum_data["geometry"].dense(dense_dimensions, min_coordinates, default_value=truncation)
+        instances, _, _ = frustum_data["instance3d"].dense(dense_dimensions, min_coordinates)
+        semantics, _, _ = frustum_data["semantic3d_label"].dense(dense_dimensions, min_coordinates)
+
+        geometry = geometry.squeeze()
+        instances = instances.squeeze()
+        semantics = semantics.squeeze()
+
         # filter 3d instances by 2d instances
-        instances_filtered = filter_instances(instance_data, frustum_data["instance3d"])
+        instances_filtered = filter_instances(instance_data, instances)
 
         # merge output
-        panoptic_instances = torch.zeros_like(frustum_data["geometry"].F)
-        panoptic_semantics = {}
+        panoptic_instances = torch.zeros_like(geometry).int()
+        panoptic_semantic_mapping = {}
 
         things_start_index = 2  # map wall and floor to id 1 and 2
 
-        surface_mask = frustum_data["geometry"].F.abs() < 1.0
+        surface_mask = geometry.abs() <= 1.5
 
         # Merge things classes
         for index, instance_id in enumerate(instances_filtered.unique()):
             # Ignore freespace
             if instance_id != 0:
                 # Compute 3d instance surface mask
-                instance_mask: torch.Tensor = frustum_data["instance3d"].F == instance_id
-                instance_surface_mask = instance_mask & surface_mask
+                instance_mask: torch.Tensor = (instances == instance_id)
+                # instance_surface_mask = instance_mask & surface_mask
                 panoptic_instance_id = index + things_start_index
-                panoptic_instances[instance_surface_mask] = panoptic_instance_id
+                panoptic_instances[instance_mask] = panoptic_instance_id
 
                 # get semantic prediction
-                semantic_region = torch.masked_select(frustum_data["semantic3d_label"].F, instance_surface_mask)
-                unique_semantic_labels, semantic_counts = torch.unique(semantic_region, return_counts=True)
+                semantic_region = torch.masked_select(semantics, instance_mask)
+                unique_labels, semantic_counts = torch.unique(semantic_region[semantic_region != 0], return_counts=True)
 
-                # TODO: ignore semantic freespace label?
                 max_count, max_count_index = torch.max(semantic_counts, dim=0)
-                selected_label = unique_semantic_labels[max_count_index]
+                selected_label = unique_labels[max_count_index]
 
-                panoptic_semantics[panoptic_instance_id] = selected_label
+                panoptic_semantic_mapping[panoptic_instance_id] = selected_label.int()
 
         # Merge stuff classes
         # Merge floor class
         wall_class = 10
         wall_id = 1
-        wall_surface_mask = frustum_data["semantic3d_label"].F == wall_class & surface_mask
-        panoptic_instances[wall_surface_mask] = wall_id
-        panoptic_semantics[wall_id] = wall_class
+        wall_mask = semantics == wall_class
+        panoptic_instances[wall_mask] = wall_id
+        panoptic_semantic_mapping[wall_id] = wall_class
 
         # Merge floor class
         floor_class = 11
         floor_id = 2
-        floor_surface_mask = frustum_data["semantic3d_label"].F == floor_class & surface_mask
-        panoptic_instances[floor_surface_mask] = floor_id
-        panoptic_semantics[floor_id] = floor_class
+        floor_mask = semantics == floor_class
+        panoptic_instances[floor_mask] = floor_id
+        panoptic_semantic_mapping[floor_id] = floor_class
 
         # Search label for unassigned surface voxels
-        unassigned_voxels = surface_mask & (panoptic_instances == 0).bool()
+        unassigned_voxels = (surface_mask & (panoptic_instances == 0).bool()).nonzero()
 
         panoptic_instances_copy = panoptic_instances.clone()
         for voxel in unassigned_voxels:
             label = nn_search(panoptic_instances_copy, voxel)
 
-            panoptic_instances[0, 0, voxel[0], voxel[1], voxel[2]] = label
+            panoptic_instances[voxel[0], voxel[1], voxel[2]] = label
 
-        result = {"panoptic_instances": panoptic_instances, "panoptic_semantics": panoptic_semantics}
+        panoptic_semantics = torch.zeros_like(panoptic_instances)
+
+        for instance_id, semantic_label in panoptic_semantic_mapping.items():
+            instance_mask = panoptic_instances == instance_id
+            panoptic_semantics[instance_mask] = semantic_label
+
+        result = {"panoptic_instances": panoptic_instances, "panoptic_semantics": panoptic_semantics,
+                  "panoptic_semantic_mapping": panoptic_semantic_mapping}
 
         return {}, result
 
 
 def filter_instances(instances2d,  instances3d):
-    instances_filtered = torch.zeros_like(instances3d.F)
+    instances_filtered = torch.zeros_like(instances3d)
     instance_ids_2d = (instances2d["locations"][0] + 1)
     for instance_id in instance_ids_2d:
         if instance_id != 0:
-            instance_mask = instances3d.F == instance_id
+            instance_mask = instances3d == instance_id
             instances_filtered[instance_mask] = instance_id
 
     return instances_filtered
@@ -99,9 +124,9 @@ def nn_search(grid, point, radius=3):
     for x in range(start, end):
         for y in range(start, end):
             for z in range(start, end):
-                offset = torch.tensor([x, y, z])
+                offset = torch.tensor([x, y, z], device=point.device)
                 point_offset = point + offset
-                label = grid[0, 0, point_offset[0], point_offset[1], point_offset[2]]
+                label = grid[point_offset[0], point_offset[1], point_offset[2]]
 
                 if label != 0:
                     return label

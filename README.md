@@ -65,6 +65,9 @@ Download the pretrained model checkpoint for 3D-Front from https://hidrive.ionos
 ## Inference
 To run the method on a 3D-Front sample run `python tools/test_nest_single_image.py` with the pre-trained checkpoint.
 
+```
+python tools/test_nest_single_image.py -i <path_to_input_image> -o <output_path>
+```
 
 ## Datasets
 
