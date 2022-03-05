@@ -6,12 +6,13 @@ import torch
 
 import marching_cubes as mc
 
+from lib.utils.transform import coords_multiplication
 from . import io, utils
 
 
 def write_distance_field(distance_field: Union[np.array, torch.Tensor], labels: Optional[Union[np.array, torch.Tensor]],
                          output_file: os.PathLike, iso_value: float = 1.0, truncation: float = 3.0,
-                         color_palette=None) -> None:
+                         color_palette=None, transform=None) -> None:
     if isinstance(distance_field, torch.Tensor):
         distance_field = distance_field.detach().cpu().numpy()
 
@@ -24,6 +25,12 @@ def write_distance_field(distance_field: Union[np.array, torch.Tensor], labels: 
     else:
         vertices, triangles = get_mesh(distance_field, iso_value, truncation)
         colors = None
+
+    if transform is not None:
+        if isinstance(transform, torch.Tensor):
+            transform = transform.detach().cpu().numpy()
+
+        vertices = coords_multiplication(transform, vertices)
 
     io.write_ply(vertices, colors, triangles, output_file)
 
