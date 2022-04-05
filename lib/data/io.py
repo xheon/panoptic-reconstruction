@@ -132,3 +132,17 @@ def read_sparse_segmentation_to_dense(file_path: os.PathLike, offset_value: int 
     instance_grid[locations[:, 0], locations[:, 1], locations[:, 2]] = instance
 
     return semantic_grid, instance_grid
+
+
+def assemble_frame_name(frame_name, type_name: str, extension: str, drop_yaw: bool = False):
+    frame_parts = frame_name.split("_")
+    frame_name = frame_parts[0]
+    frame_angle = frame_parts[1]
+    frame_rot = frame_parts[2]
+
+    if drop_yaw:
+        file_name = f"{frame_name}_{type_name}{frame_angle}{extension}"
+    else:
+        file_name = f"{frame_name}_{type_name}{frame_angle}_{frame_rot}{extension}"
+
+    return file_name

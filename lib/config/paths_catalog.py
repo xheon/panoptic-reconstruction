@@ -30,7 +30,29 @@ class DatasetCatalog:
             "file_list_path": "resources/front3d/test_list_3d.txt",
             "dataset_root_path": "data/front3d/",
             "factory": "Front3D"
-        }
+        },
+
+        # ------------------------------------------------------------------
+        # Matterport
+        # ------------------------------------------------------------------
+        "Matterport_Train": {
+            "file_list_path": "resources/matterport/train_list_3d.txt",
+            "dataset_root_path": "data/matterport/",
+            "factory": "Matterport"
+        },
+
+        "Matterport_Validation": {
+            "file_list_path": "resources/matterport/validation_list_3d.txt",
+            "dataset_root_path": "data/matterport/",
+            "factory": "Matterport"
+
+        },
+
+        "Matterport_Test": {
+            "file_list_path": "resources/matterport/test_list_3d.txt",
+            "dataset_root_path": "data/matterport/",
+            "factory": "Matterport"
+        },
     }
 
     @staticmethod
