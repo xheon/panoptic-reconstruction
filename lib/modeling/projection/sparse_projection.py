@@ -133,7 +133,7 @@ class SparseProjection(nn.Module):
 
             # pad to 256,256,256
             padding_offsets = self.compute_frustum_padding(intrinsic_inverse)
-            flatten_coordinates = flatten_coordinates + padding_offsets + torch.tensor([1, 1, 1]).float().to(device)
+            flatten_coordinates = flatten_coordinates + padding_offsets #- torch.tensor([1, 1, 1]).float().to(device)  # Fix wrong voxel offset
 
             flat_features = sample_features.view(num_points * num_repetition, -1)
             sparse_coordinates.append(flatten_coordinates)
