@@ -149,6 +149,10 @@ It generates 3D unsigned distance fields at 3cm resolution together with 3D sema
   - Some 3D segmentation samples did break during conversion to the provided npz format due to an integer overflow of the labels. - Sorry for any inconveniences caused.
   - Add evaluation code. 
   - Fix a voxel shift in the backprojection layer.
+- 2022-04-05: Add initial Matterport release (dataloader, file lists, example sample).
+- 2022-03-03: Add script to evaluate a single image. 
+- 2022-02-12: Bug fixes
+- 2021-12-22: Initial commit of cleaned up code.
 
 # References
 
