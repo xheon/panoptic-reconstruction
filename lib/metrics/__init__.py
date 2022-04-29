@@ -16,4 +16,4 @@ from .masked_absolute_error import MaskedAbsoluteError
 
 from .mean_average_precision import MeanAveragePrecision
 
-# TODO: add cleaned up panoptic reconstruction quality metric
+from .panoptic_reconstruction_quality import PanopticReconstructionQuality

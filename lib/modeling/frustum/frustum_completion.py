@@ -33,8 +33,8 @@ class FrustumCompletion(nn.Module):
         # losses
         self.criterion_occupancy = F.binary_cross_entropy_with_logits
         self.criterion_surface = F.l1_loss
-        self.criterion_semantics = nn.CrossEntropyLoss(reduction="none")
-        self.criterion_instances = nn.CrossEntropyLoss(reduction="none")
+        self.criterion_semantics = F.cross_entropy  #nn.CrossEntropyLoss(reduction="none")
+        self.criterion_instances = F.cross_entropy  #nn.CrossEntropyLoss(reduction="none")
 
         self.truncation = config.MODEL.FRUSTUM3D.TRUNCATION
         self.frustum_dimensions = [256, 256, 256]
@@ -169,7 +169,7 @@ class FrustumCompletion(nn.Module):
 
     def compute_instance_64_loss(self, prediction: torch.Tensor, ground_truth: torch.Tensor,
                                  mask: torch.Tensor, weighting_mask: torch.Tensor) -> Tuple[Dict, Dict]:
-        loss = self.criterion_instances(prediction, ground_truth, weight=self.instance_weights)
+        loss = self.criterion_instances(prediction, ground_truth, weight=self.instance_weights, reduction="none")
 
         # Only consider loss within the camera frustum
         loss = torch.masked_select(loss, mask)
@@ -189,7 +189,7 @@ class FrustumCompletion(nn.Module):
 
     def compute_semantic_64_loss(self, prediction: torch.Tensor, ground_truth: torch.Tensor,
                                   mask: torch.Tensor, weighting_mask: torch.Tensor) -> Tuple[Dict, Dict]:
-        loss = self.criterion_semantics(prediction, ground_truth, weight=self.semantic_weights)
+        loss = self.criterion_semantics(prediction, ground_truth, weight=self.semantic_weights, reduction="none")
 
         # Only consider loss within the camera frustum
         loss = torch.masked_select(loss, mask)
@@ -280,7 +280,7 @@ class FrustumCompletion(nn.Module):
         # Get sparse GT values from dense tensor
         ground_truth_values = modeling.get_sparse_values(ground_truth, predicted_coordinates)
 
-        loss = self.criterion_instances(prediction.F, ground_truth_values.squeeze(1), weight=self.instance_weights)
+        loss = self.criterion_instances(prediction.F, ground_truth_values.squeeze(1), weight=self.instance_weights, reduction="none")
 
         # Get sparse weighting values from dense tensor
         weighting_values = modeling.get_sparse_values(weighting_mask, predicted_coordinates).squeeze(1)
@@ -310,7 +310,7 @@ class FrustumCompletion(nn.Module):
         # Get sparse GT values from dense tensor
         ground_truth_values = modeling.get_sparse_values(ground_truth, predicted_coordinates)
 
-        loss = self.criterion_semantics(prediction.F, ground_truth_values.squeeze(), weight=self.semantic_weights)
+        loss = self.criterion_semantics(prediction.F, ground_truth_values.squeeze(), weight=self.semantic_weights, reduction="none")
 
         # Get sparse weighting values from dense tensor
         weighting_values = modeling.get_sparse_values(weighting_mask, predicted_coordinates).squeeze()
@@ -449,7 +449,7 @@ class FrustumCompletion(nn.Module):
         # Get sparse GT values from dense tensor
         ground_truth_values = modeling.get_sparse_values(ground_truth, predicted_coordinates)
 
-        loss = self.criterion_instances(prediction.F, ground_truth_values.squeeze(1), weight=self.instance_weights)
+        loss = self.criterion_instances(prediction.F, ground_truth_values.squeeze(1), weight=self.instance_weights, reduction="none")
 
         # Get sparse weighting values from dense tensor
         weighting_values = modeling.get_sparse_values(weighting_mask, predicted_coordinates).squeeze(1)
@@ -479,7 +479,7 @@ class FrustumCompletion(nn.Module):
         # Get sparse GT values from dense tensor
         ground_truth_values = modeling.get_sparse_values(ground_truth, predicted_coordinates)
 
-        loss = self.criterion_semantics(prediction.F, ground_truth_values.squeeze(1), weight=self.semantic_weights)
+        loss = self.criterion_semantics(prediction.F, ground_truth_values.squeeze(1), weight=self.semantic_weights, reduction="none")
 
         # Get sparse weighting values from dense tensor
         weighting_values = modeling.get_sparse_values(weighting_mask, predicted_coordinates).squeeze(1)

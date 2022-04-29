@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Dict
 
 import torch
@@ -57,19 +58,22 @@ class PostProcess(nn.Module):
             if instance_id != 0:
                 # Compute 3d instance surface mask
                 instance_mask: torch.Tensor = (instances == instance_id)
-                # instance_surface_mask = instance_mask & surface_mask
-                panoptic_instance_id = index + things_start_index
-                panoptic_instances[instance_mask] = panoptic_instance_id
 
-                # get semantic prediction
-                semantic_region = torch.masked_select(semantics, instance_mask)
-                semantic_things = semantic_region[(semantic_region != 0) & (semantic_region != 10) & (semantic_region != 11)]
+                if instance_mask.sum() > 0:
+                    # instance_surface_mask = instance_mask & surface_mask
+                    panoptic_instance_id = index + things_start_index
+                    panoptic_instances[instance_mask] = panoptic_instance_id
 
-                unique_labels, semantic_counts = torch.unique(semantic_things, return_counts=True)
-                max_count, max_count_index = torch.max(semantic_counts, dim=0)
-                selected_label = unique_labels[max_count_index]
+                    # get semantic prediction
+                    semantic_region = torch.masked_select(semantics, instance_mask)
+                    semantic_things = semantic_region[(semantic_region != 0) & (semantic_region != 10) & (semantic_region != 11)]
 
-                panoptic_semantic_mapping[panoptic_instance_id] = selected_label.int().item()
+                    unique_labels, semantic_counts = torch.unique(semantic_things, return_counts=True)
+                    max_count, max_count_index = torch.max(semantic_counts, dim=0)
+                    selected_label = unique_labels[max_count_index]
+
+                    panoptic_semantic_mapping[panoptic_instance_id] = selected_label.int().item()
+
 
         # Merge stuff classes
         # Merge floor class
@@ -90,10 +94,15 @@ class PostProcess(nn.Module):
         unassigned_voxels = (surface_mask & (panoptic_instances == 0).bool()).nonzero()
 
         panoptic_instances_copy = panoptic_instances.clone()
-        for voxel in unassigned_voxels:
-            label = nn_search(panoptic_instances_copy, voxel)
+        # for voxel in unassigned_voxels:
+        #     label = nn_search_old(panoptic_instances_copy, voxel)
+        #
+        #     panoptic_instances[voxel[0], voxel[1], voxel[2]] = label
 
-            panoptic_instances[voxel[0], voxel[1], voxel[2]] = label
+        panoptic_instances[
+            unassigned_voxels[:, 0],
+            unassigned_voxels[:, 1],
+            unassigned_voxels[:, 2]] = nn_search(panoptic_instances_copy, unassigned_voxels)
 
         panoptic_semantics = torch.zeros_like(panoptic_instances)
 
@@ -118,7 +127,7 @@ def filter_instances(instances2d,  instances3d):
     return instances_filtered
 
 
-def nn_search(grid, point, radius=3):
+def nn_search_old(grid, point, radius=3):
     start = -radius
     end = radius
 
@@ -133,3 +142,25 @@ def nn_search(grid, point, radius=3):
                     return label
 
     return 0
+
+def nn_search(grid, point, radius=3):
+    start = -radius
+    end = radius
+    label = torch.zeros([len(point)], device=point.device, dtype=grid.dtype)
+    mask = torch.zeros_like(label).bool()
+
+    for x in range(start, end):
+        for y in range(start, end):
+            for z in range(start, end):
+                offset = torch.tensor([x, y, z], device=point.device)
+                point_offset = point + offset
+                label_bi = grid[point_offset[:, 0],
+                                point_offset[:, 1],
+                                point_offset[:, 2]]
+
+                if label_bi.sum() != 0:
+                    new_mask = (label_bi > 0) * (~mask)
+                    label[new_mask] = label_bi[new_mask]
+                    mask = mask + new_mask
+    return label
+
