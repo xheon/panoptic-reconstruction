@@ -1,5 +1,6 @@
 import os
 import random
+import zipfile
 from pathlib import Path
 from typing import Dict, Union, List, Tuple
 
@@ -63,76 +64,87 @@ class Front3D(torch.utils.data.Dataset):
         sample.add_field("index", index)
         sample.add_field("name", sample_path)
 
-        # 2D data
-        if "color" in self.fields:
-            color = Image.open(self.dataset_root_path / scene_id / f"rgb_{image_id}.png", formats=["PNG"])
-            color = self.transforms["color"](color)
-            sample.add_field("color", color)
+        try:
 
-        if "depth" in self.fields:
-            depth = pyexr.read(str(self.dataset_root_path / scene_id / f"depth_{image_id}.exr")).squeeze()[::-1, ::-1].copy()
-            depth = self.transforms["depth"](depth)
-            sample.add_field("depth", depth)
+            # 2D data
+            if "color" in self.fields:
+                color = Image.open(self.dataset_root_path / scene_id / f"rgb_{image_id}.png", formats=["PNG"])
+                color = self.transforms["color"](color)
+                sample.add_field("color", color)
 
-        if "instance2d" in self.fields:
-            segmentation2d = np.load(self.dataset_root_path / scene_id / f"segmap_{image_id}.mapped.npz")["data"]
-            instance2d = self.transforms["instance2d"](segmentation2d)
-            sample.add_field("instance2d", instance2d)
+            if "depth" in self.fields:
+                depth = pyexr.read(str(self.dataset_root_path / scene_id / f"depth_{image_id}.exr")).squeeze()[::-1, ::-1].copy()
+                depth = self.transforms["depth"](depth)
+                sample.add_field("depth", depth)
 
-        # 3D data
-        needs_weighting = False
-        if "geometry" in self.fields:
-            geometry_path = self.dataset_root_path / scene_id / f"geometry_{image_id}.npz"
-            geometry = np.load(geometry_path)["data"]
-            geometry = self.transforms["geometry"](geometry)
+            if "instance2d" in self.fields:
+                segmentation2d = np.load(self.dataset_root_path / scene_id / f"segmap_{image_id}.mapped.npz")["data"]
+                instance2d = self.transforms["instance2d"](segmentation2d)
+                sample.add_field("instance2d", instance2d)
 
-            # process hierarchy
-            sample.add_field("occupancy_256", self.transforms["occupancy_256"](geometry))
-            sample.add_field("occupancy_128", self.transforms["occupancy_128"](geometry))
-            sample.add_field("occupancy_64", self.transforms["occupancy_64"](geometry))
+            # 3D data
+            needs_weighting = False
 
-            geometry = self.transforms["geometry_truncate"](geometry)
-            sample.add_field("geometry", geometry)
+            if "geometry" in self.fields:
+                geometry_path = self.dataset_root_path / scene_id / f"geometry_{image_id}.npz"
+                geometry = np.load(geometry_path)["data"]
+                geometry = np.ascontiguousarray(np.flip(geometry, axis=[0, 1]))  # Flip order, thanks for pointing that out.
+                geometry = self.transforms["geometry"](geometry)
 
-            # add frustum mask
-            sample.add_field("frustum_mask", self.frustum_mask.clone())
+                # process hierarchy
+                sample.add_field("occupancy_256", self.transforms["occupancy_256"](geometry))
+                sample.add_field("occupancy_128", self.transforms["occupancy_128"](geometry))
+                sample.add_field("occupancy_64", self.transforms["occupancy_64"](geometry))
 
-            needs_weighting = True
+                geometry = self.transforms["geometry_truncate"](geometry)
+                sample.add_field("geometry", geometry)
 
-        if "semantic3d" or "instance3d" in self.fields:
-            segmentation3d_path = self.dataset_root_path / scene_id / f"segmentation_{image_id}.mapped.npz"
-            semantic3d, instance3d = np.load(segmentation3d_path)["data"]
-            needs_weighting = True
+                # add frustum mask
+                sample.add_field("frustum_mask", self.frustum_mask.clone())
 
-            if "semantic3d" in self.fields:
-                semantic3d = self.transforms["semantic3d"](semantic3d)
-                sample.add_field("semantic3d", semantic3d)
+                needs_weighting = True
 
-                # process semantic3d hierarchy
-                sample.add_field("semantic3d_64", self.transforms["segmentation3d_64"](semantic3d))
-                sample.add_field("semantic3d_128", self.transforms["segmentation3d_128"](semantic3d))
+            if "semantic3d" or "instance3d" in self.fields:
+                segmentation3d_path = self.dataset_root_path / scene_id / f"segmentation_{image_id}.mapped.npz"
+                segmentation3d_data = np.load(segmentation3d_path)["data"]
+                segmentation3d_data = np.copy(np.flip(segmentation3d_data, axis=[1, 2]))  # Flip order, thanks for pointing that out.
+                semantic3d, instance3d = segmentation3d_data
+                needs_weighting = True
 
-            if "instance3d" in self.fields:
-                # Ensure consistent instance id shuffle between 2D and 3D instances
-                instance_mapping = sample.get_field("instance2d").get_field("instance_mapping")
-                instance3d = self.transforms["instance3d"](instance3d, mapping=instance_mapping)
-                sample.add_field("instance3d", instance3d)
+                if "semantic3d" in self.fields:
+                    semantic3d = self.transforms["semantic3d"](semantic3d)
+                    sample.add_field("semantic3d", semantic3d)
 
-                # process instance3d hierarchy
-                sample.add_field("instance3d_64", self.transforms["segmentation3d_64"](instance3d))
-                sample.add_field("instance3d_128", self.transforms["segmentation3d_128"](instance3d))
+                    # process semantic3d hierarchy
+                    sample.add_field("semantic3d_64", self.transforms["segmentation3d_64"](semantic3d))
+                    sample.add_field("semantic3d_128", self.transforms["segmentation3d_128"](semantic3d))
 
-        if needs_weighting:
-            weighting_path = self.dataset_root_path / scene_id / f"weighting_{image_id}.npz"
-            weighting = np.load(weighting_path)["data"]
-            weighting = self.transforms["weighting3d"](weighting)
-            sample.add_field("weighting3d", weighting)
+                if "instance3d" in self.fields:
+                    # Ensure consistent instance id shuffle between 2D and 3D instances
+                    instance_mapping = sample.get_field("instance2d").get_field("instance_mapping")
+                    instance3d = self.transforms["instance3d"](instance3d, mapping=instance_mapping)
+                    sample.add_field("instance3d", instance3d)
 
-            # Process weighting mask hierarchy
-            sample.add_field("weighting3d_64", self.transforms["weighting3d_64"](weighting))
-            sample.add_field("weighting3d_128", self.transforms["weighting3d_128"](weighting))
+                    # process instance3d hierarchy
+                    sample.add_field("instance3d_64", self.transforms["segmentation3d_64"](instance3d))
+                    sample.add_field("instance3d_128", self.transforms["segmentation3d_128"](instance3d))
 
-        return sample_path, sample
+            if needs_weighting:
+                weighting_path = self.dataset_root_path / scene_id / f"weighting_{image_id}.npz"
+                weighting = np.load(weighting_path)["data"]
+                weighting = np.copy(np.flip(weighting, axis=[0, 1]))  # Flip order, thanks for pointing that out.
+                weighting = self.transforms["weighting3d"](weighting)
+                sample.add_field("weighting3d", weighting)
+
+                # Process weighting mask hierarchy
+                sample.add_field("weighting3d_64", self.transforms["weighting3d_64"](weighting))
+                sample.add_field("weighting3d_128", self.transforms["weighting3d_128"](weighting))
+
+            return sample_path, sample
+        except Exception as e:
+            print(sample_path)
+            print(e)
+            return None, sample
 
     def __len__(self) -> int:
         return len(self.samples)
