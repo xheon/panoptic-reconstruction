@@ -17,7 +17,6 @@ from lib.visualize.mesh import get_mesh
 from lib.config import config
 from lib.structures.field_list import collect
 
-from lib.utils.debugger import Debugger
 
 from tools.test_net_single_image import configure_inference
 from lib.utils import re_seed
@@ -169,6 +168,5 @@ if __name__ == '__main__':
     parser.add_argument("opts", default=None, nargs=argparse.REMAINDER)
 
     args = parser.parse_args()
-    Debugger(local_ip="tuini15-vc21.vc.in.tum.de", port=12346)
 
     main(args, args.s, args.e)
