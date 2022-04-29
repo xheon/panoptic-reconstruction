@@ -148,6 +148,7 @@ It generates 3D unsigned distance fields at 3cm resolution together with 3D sema
     Note: This checkpoint evaluates to ~43% PRQ, compared to the stated 46.77% PRQ reported in the paper - we are currently investigating this gap.
   - Some 3D segmentation samples did break during conversion to the provided npz format due to an integer overflow of the labels. - Sorry for any inconveniences caused.
   - Add evaluation code. 
+  - Fix a voxel shift in the backprojection layer.
 
 # References
 
