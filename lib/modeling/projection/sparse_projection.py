@@ -89,9 +89,9 @@ class SparseProjection(nn.Module):
             sample_features = []
 
             # image features
-            image_features = features[idx, :, depth_pixels_xy[:, 0], depth_pixels_xy[:, 1]]
-            image_features = image_features.permute(1, 0)
-            sample_features.append(image_features)
+            # image_features = features[idx, :, depth_pixels_xy[:, 0], depth_pixels_xy[:, 1]]
+            # image_features = image_features.permute(1, 0)
+            # sample_features.append(image_features)
 
             # instance features
             mask_logits = instances["raw"]  # use mask logits

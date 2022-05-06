@@ -116,19 +116,19 @@ class UNetBlockOuterSparse(UNetBlock):
         )
 
         # define image feature encoder
-        num_encoders += 1
-        self.num_image_features = 80
+        # num_encoders += 1
+        self.num_image_features = 0
         if config.MODEL.BACKBONE.CONV_BODY == "R-50":
             self.num_image_features = 128
 
-        feature_downsample = nn.Sequential(
-            Me.MinkowskiConvolution(self.num_image_features, num_inner_features, kernel_size=1, stride=1, bias=True, dimension=3),
-            Me.MinkowskiInstanceNorm(num_inner_features)
-        )
-        self.encoder_features = nn.Sequential(
-            SparseBasicBlock(self.num_image_features, num_inner_features, dimension=3,
-                             downsample=feature_downsample)
-        )
+        # feature_downsample = nn.Sequential(
+        #     Me.MinkowskiConvolution(self.num_image_features, num_inner_features, kernel_size=1, stride=1, bias=True, dimension=3),
+        #     Me.MinkowskiInstanceNorm(num_inner_features)
+        # )
+        # self.encoder_features = nn.Sequential(
+        #     SparseBasicBlock(self.num_image_features, num_inner_features, dimension=3,
+        #                      downsample=feature_downsample)
+        # )
 
         # define instance feature encoder
         num_encoders += 1
@@ -194,12 +194,12 @@ class UNetBlockOuterSparse(UNetBlock):
 
         # process image features
         start_features = end_features
-        end_features += self.num_image_features
+        # end_features += self.num_image_features
 
-        features_features = Me.SparseTensor(content.F[:, start_features:end_features], coordinate_manager=cm, coordinate_map_key=key)
-        encoded_features = self.encoder_features(features_features) if not self.verbose else self.forward_verbose(features_features, self.encoder_features)
+        # features_features = Me.SparseTensor(content.F[:, start_features:end_features], coordinate_manager=cm, coordinate_map_key=key)
+        # encoded_features = self.encoder_features(features_features) if not self.verbose else self.forward_verbose(features_features, self.encoder_features)
 
-        encoded_input = Me.cat(encoded_input, encoded_features)
+        # encoded_input = Me.cat(encoded_input, encoded_features)
 
         # process instance features
         start_features = end_features
