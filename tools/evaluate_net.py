@@ -42,13 +42,11 @@ def main(opts, start=0, end=None):
     # Define dataset
     # config.DATALOADER.NUM_WORKERS=0
     dataloader = setup_dataloader(config.DATASETS.VAL, False, is_iteration_based=False, shuffle=False)
-    dataloader.dataset.samples = dataloader.dataset.samples[:25]
+    dataloader.dataset.samples = dataloader.dataset.samples[start:end]
     print(f"Loaded {len(dataloader.dataset)} samples.")
 
     # Prepare metric
     metric = metrics.PanopticReconstructionQuality()
-
-    frustum_mask = dataloader.dataset.frustum_mask
 
     for idx, (image_ids, targets) in tqdm(enumerate(dataloader), total=len(dataloader)):
         if targets is None:
@@ -66,6 +64,11 @@ def main(opts, start=0, end=None):
                 print(e)
                 del targets, images
                 continue
+
+        if config.DATASETS.NAME == "front3d":
+            frustum_mask = dataloader.dataset.frustum_mask
+        else:
+            frustum_mask = targets[0].get_field("frustum_mask").squeeze()
 
         # Prepare ground truth
         instances_gt, instance_semantic_classes_gt = _prepare_semantic_mapping(targets[0].get_field("instance3d").squeeze(),
@@ -87,7 +90,14 @@ def main(opts, start=0, end=None):
 
         # Add to metric
         # Format: Dict[instance_id: instance_mask, semantic_label]
-        metric.add(instance_information_pred, instance_information_gt)
+        per_sample_result = metric.add(instance_information_pred, instance_information_gt)
+
+        file_name = image_ids[0].replace("/", "_")
+        with open(output_path / f"{file_name}.json", "w") as f:
+            json.dump({k: cat.as_metric for k, cat in per_sample_result.items()}, f, indent=4)
+
+        if opts.verbose:
+            pprint(per_sample_result)
 
     # Reduce metric
     quantitative = metric.reduce()
@@ -158,6 +168,42 @@ def _prepare_semantic_mapping(instances, semantics, offset=2):
     return panoptic_instances, semantic_mapping
 
 
+def evaluate_jsons(opts):
+    result_path = Path(opts.output)
+    samples = [file for file in result_path.iterdir() if file.suffix == ".json"]
+
+    print(f"Found {len(samples)} samples")
+    metric = metrics.PanopticReconstructionQuality()
+    for sample in tqdm(samples):
+        try:
+            content = json.load(open(sample))
+            data = {}
+            for k, cat in content.items():
+                panoptic_sample = metrics.PQStatCategory()
+                panoptic_sample.iou = cat["iou"]
+                panoptic_sample.tp = cat["tp"]
+                panoptic_sample.fp = cat["fp"]
+                panoptic_sample.fn = cat["fn"]
+                panoptic_sample.n = cat["n"]
+                data[int(k)] = panoptic_sample
+
+            metric.add_sample(data)
+        except Exception as e:
+            print(f"Error with {sample}")
+            continue
+
+    summary = metric.reduce()
+
+    for name, value in summary.items():
+        if name[0] == "n":
+            print(f"{name:>10}\t\t{value:>5d}")
+        else:
+            print(f"{name:>10}\t\t{value:>5.3f}")
+
+    with open(result_path / "panoptic_result.json", "w") as f:
+        json.dump(summary, f, indent=4)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", "-o", type=str, default="output/evaluation/")
@@ -169,4 +215,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    main(args, args.s, args.e)
+    if args.eval_only:
+        evaluate_jsons(args)
+    else:
+        main(args, args.s, args.e)

@@ -108,6 +108,11 @@ class PanopticReconstructionQuality(Metric):
 
         return per_sample_result
 
+    def add_sample(self, sample):
+        for k in sample.keys():
+            if k in self.categories:
+                self.categories[k] += sample[k]
+
     def reduce(self) -> Dict:
         if self.reduction == "mean":
             return self.reduce_mean()
