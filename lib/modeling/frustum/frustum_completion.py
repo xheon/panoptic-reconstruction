@@ -130,20 +130,20 @@ class FrustumCompletion(nn.Module):
         hierarchy_results.update(occupancy_result)
 
         # Instances 64
-        instance_prediction = predictions[1]
-        instance_ground_truth = collect(targets, "instance3d_64")
-        instance_loss, instance_result = self.compute_instance_64_loss(instance_prediction, instance_ground_truth,
-                                                                       frustum_mask, weighting_mask)
-        hierarchy_losses.update(instance_loss)
-        hierarchy_results.update(instance_result)
-
-        # Semantic 64
-        semantic_prediction = predictions[2]
-        semantic_ground_truth = collect(targets, "semantic3d_64")
-        semantic_loss, semantic_result = self.compute_semantic_64_loss(semantic_prediction, semantic_ground_truth,
-                                                                       frustum_mask, weighting_mask)
-        hierarchy_losses.update(semantic_loss)
-        hierarchy_results.update(semantic_result)
+        # instance_prediction = predictions[1]
+        # instance_ground_truth = collect(targets, "instance3d_64")
+        # instance_loss, instance_result = self.compute_instance_64_loss(instance_prediction, instance_ground_truth,
+        #                                                                frustum_mask, weighting_mask)
+        # hierarchy_losses.update(instance_loss)
+        # hierarchy_results.update(instance_result)
+        #
+        # # Semantic 64
+        # semantic_prediction = predictions[2]
+        # semantic_ground_truth = collect(targets, "semantic3d_64")
+        # semantic_loss, semantic_result = self.compute_semantic_64_loss(semantic_prediction, semantic_ground_truth,
+        #                                                                frustum_mask, weighting_mask)
+        # hierarchy_losses.update(semantic_loss)
+        # hierarchy_results.update(semantic_result)
 
         return hierarchy_losses, hierarchy_results
 
@@ -224,22 +224,22 @@ class FrustumCompletion(nn.Module):
         # instances at 128
         instance_prediction: Me.SparseTensor = predictions[1]
 
-        if instance_prediction is not None:
-            instance_ground_truth = collect(targets, "instance3d_128").long().squeeze(1)
-            instance_loss, instance_result = self.compute_instance_128_loss(instance_prediction, instance_ground_truth, weighting_mask)
-
-            hierarchy_losses.update(instance_loss)
-            hierarchy_results.update(instance_result)
-
-        # semantics at 128
-        semantic_prediction: Me.SparseTensor = predictions[2]
-
-        if semantic_prediction is not None:
-            semantic_ground_truth = collect(targets, "semantic3d_128").long().squeeze(1)
-            semantic_loss, semantic_result = self.compute_semantic_128_loss(semantic_prediction, semantic_ground_truth, weighting_mask)
-
-            hierarchy_losses.update(semantic_loss)
-            hierarchy_results.update(semantic_result)
+        # if instance_prediction is not None:
+        #     instance_ground_truth = collect(targets, "instance3d_128").long().squeeze(1)
+        #     instance_loss, instance_result = self.compute_instance_128_loss(instance_prediction, instance_ground_truth, weighting_mask)
+        #
+        #     hierarchy_losses.update(instance_loss)
+        #     hierarchy_results.update(instance_result)
+        #
+        # # semantics at 128
+        # semantic_prediction: Me.SparseTensor = predictions[2]
+        #
+        # if semantic_prediction is not None:
+        #     semantic_ground_truth = collect(targets, "semantic3d_128").long().squeeze(1)
+        #     semantic_loss, semantic_result = self.compute_semantic_128_loss(semantic_prediction, semantic_ground_truth, weighting_mask)
+        #
+        #     hierarchy_losses.update(semantic_loss)
+        #     hierarchy_results.update(semantic_result)
 
         return hierarchy_losses, hierarchy_results
 
