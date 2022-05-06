@@ -38,7 +38,6 @@ class PanopticReconstructionQuality(Metric):
                 11: False
             }
 
-            config.DATASETS.NAME = "matterport"
             if config.DATASETS.NAME == "matterport":
                 self.category_information[12] = False
 

@@ -42,6 +42,7 @@ MODEL:
         INSTANCE_VOXEL_WEIGHTING: False
 
 DATASETS:
+    NAME: "front3d"
     TRAIN: "Front3D_Train"
     VAL: "Front3D_Validation"
     TRAINVAL: "Front3D_Train"
