@@ -58,7 +58,10 @@ class PanopticReconstruction(nn.Module):
         # 2D to 3D
         # Projection
         feature2d = results["depth"]["features"]
-        projection_results = self.projection(results["depth"]["prediction"], feature2d, instance_results, targets)
+
+        # Ablation: use GT depth
+        depth_maps = torch.stack([torch.flip(target.get_field("depth").get_tensor(), [0, 1]) for target in targets]).unsqueeze(1).to("cuda").contiguous()
+        projection_results = self.projection(depth_maps, feature2d, instance_results, targets)
         results.update({"projection": projection_results})
 
         # 3D
