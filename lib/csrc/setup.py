@@ -13,7 +13,6 @@ from torch.utils.cpp_extension import CUDAExtension
 
 requirements = ["torch", "torchvision"]
 
-
 def get_extensions():
     this_dir = os.path.dirname(os.path.abspath(__file__))
     extensions_dir = this_dir

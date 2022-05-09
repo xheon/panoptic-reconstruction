@@ -142,7 +142,7 @@ if __name__ == '__main__':
     parser.add_argument("--input", "-i", type=str, default="data/front3d-sample/rgb_0007.png")
     parser.add_argument("--output", "-o", type=str, default="output/sample_0007/")
     parser.add_argument("--config-file", "-c", type=str, default="configs/front3d_sample.yaml")
-    parser.add_argument("--model", "-m", type=str, default="data/panoptic_front3d_v2.pth")
+    parser.add_argument("--model", "-m", type=str, default="data/panoptic-front3d.pth")
     parser.add_argument("opts", default=None, nargs=argparse.REMAINDER)
 
     args = parser.parse_args()
