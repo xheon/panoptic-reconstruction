@@ -38,7 +38,6 @@ class PanopticReconstructionQuality(Metric):
                 11: False
             }
 
-            config.DATASETS.NAME = "matterport"
             if config.DATASETS.NAME == "matterport":
                 self.category_information[12] = False
 
@@ -107,6 +106,11 @@ class PanopticReconstructionQuality(Metric):
                 per_sample_result[prediction_semantic_label].fp += 1
 
         return per_sample_result
+
+    def add_sample(self, sample):
+        for k in sample.keys():
+            if k in self.categories:
+                self.categories[k] += sample[k]
 
     def reduce(self) -> Dict:
         if self.reduction == "mean":

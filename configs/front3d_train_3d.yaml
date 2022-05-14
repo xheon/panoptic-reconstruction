@@ -1,6 +1,6 @@
 MODEL:
     FIX2D: True
-    PRETRAIN: "resources/panoptic-front3d.pth"
+    PRETRAIN: "/cluster_HDD/gondor/mdahnert/panoptic-release/front3d-mask_depth_r18.pth"
 
     FIXNORM: True
 
@@ -18,7 +18,7 @@ MODEL:
 
     FRUSTUM3D:
         USE: True
-        FIX: True
+        FIX: False
         TRUNCATION: 3.0
         ISO_VALUE: 1.0
 
@@ -42,7 +42,6 @@ MODEL:
         INSTANCE_VOXEL_WEIGHTING: False
 
 DATASETS:
-    NAME: "front3d"
     TRAIN: "Front3D_Train"
     VAL: "Front3D_Validation"
     TRAINVAL: "Front3D_Train"

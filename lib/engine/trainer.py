@@ -79,7 +79,12 @@ class Trainer:
             images = collect(targets, "color")
 
             # Pass through model
-            losses, results = self.model(images, targets)
+            try:
+                losses, results = self.model(images, targets)
+            except Exception as e:
+                print(e, "skipping", image_ids[0])
+                del targets, images
+                continue
 
             # Accumulate total loss
             total_loss: torch.Tensor = 0.0
