@@ -1,6 +1,6 @@
 MODEL:
     FIX2D: True
-    PRETRAIN: "/cluster_HDD/gondor/mdahnert/panoptic-release/front3d-mask_depth_r18.pth"
+    PRETRAIN: null
 
     FIXNORM: True
 
@@ -56,7 +56,7 @@ DATALOADER:
     IMS_PER_BATCH: 1
     MAX_ITER: 300000
     SHUFFLE: True
-    NUM_WORKERS: 4
+    NUM_WORKERS: 1
 
 SOLVER:
     BASE_LR: 0.0001
