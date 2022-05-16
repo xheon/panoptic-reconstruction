@@ -9,6 +9,7 @@ import MinkowskiEngine as Me
 from lib import utils, modeling
 from lib.modeling import backbone, depth, detector, projection, frustum
 from lib.modeling.utils import ModuleResult
+from lib.modeling.bfs import Clustering
 from lib.structures import FieldList, DepthMap
 from lib.utils import logger
 from lib.config import config
@@ -30,6 +31,12 @@ class PanopticReconstruction(nn.Module):
         # 3D modules
         self.frustum3d: nn.Module = frustum.FrustumCompletion()
         self.postprocess: nn.Module = frustum.PostProcess()  # TODO: pass thing and stuff classes
+
+        # Ablation: Instance clustering
+        self.clustering = Clustering(ignored_labels=[0, 10, 11, 12],
+                                     class_mapping=torch.LongTensor([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),
+                                     thresh=2.0, score_func=torch.mean, propose_points=1000, closed_points=1000,
+                                     min_points=100)
         
         # Define hierarchical training status
         self.training_stages = OrderedDict([("LEVEL-64", config.MODEL.FRUSTUM3D.IS_LEVEL_64),
@@ -66,6 +73,18 @@ class PanopticReconstruction(nn.Module):
         losses.update({"frustum": frustum_losses})
         results.update({"frustum": frustum_results})
 
+        # Ablation: Instance clustering
+        points = results["frustum"]["semantic3d"].C[:, 1:]  # surface points / semantic points
+        scores = results["frustum"]["semantic3d"].F  # softmax from semantics?
+        predicted_points, predicted_instance_labels = self.clustering.cluster(points, scores)
+
+        instance_labels = torch.zeros_like(results["frustum"]["semantic3d_label"].F)
+        for instance_id in range(len(predicted_instance_labels)):
+            instance_mask = predicted_points[instance_id].bool()
+            instance_labels[instance_mask] = instance_id + 1
+        instance_predictions = Me.SparseTensor(instance_labels, coordinates=results["frustum"]["semantic3d"].C)
+        results["frustum"]["instance3d"] = instance_predictions
+
         if self.get_current_training_stage() == "FULL":
             _, panoptic_results = self.postprocess(instance_results, frustum_results)
             results.update({"panoptic": panoptic_results})
@@ -96,6 +115,17 @@ class PanopticReconstruction(nn.Module):
         # inference 3d
         frustum_result = self.frustum3d.inference(projection_result, frustum_mask)
         results["frustum"] = frustum_result
+
+        points = results["frustum"]["semantic3d"].C[:, 1:]  # surface points / semantic points
+        scores = results["frustum"]["semantic3d"].F  # softmax from semantics?
+        predicted_points, predicted_instance_labels = self.clustering.cluster(points, scores)
+
+        instance_labels = torch.zeros_like(results["frustum"]["semantic3d_label"].F)
+        for instance_id in range(len(predicted_instance_labels)):
+            instance_mask = predicted_points[instance_id].bool()
+            instance_labels[instance_mask] = instance_id + 1
+        instance_predictions = Me.SparseTensor(instance_labels, coordinates=results["frustum"]["semantic3d"].C)
+        results["frustum"]["instance3d"] = instance_predictions
 
         # Merge geometry, semantics & instances to panoptic output
         _, panoptic_result = self.postprocess(instance_result, frustum_result)
