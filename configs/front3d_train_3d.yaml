@@ -1,6 +1,6 @@
 MODEL:
     FIX2D: True
-    PRETRAIN: null
+    PRETRAIN: "/usr/src/app/panoptic-reconstruction/data/panoptic-front3d.pth"
 
     FIXNORM: True
 
@@ -54,7 +54,7 @@ DATASETS:
 
 DATALOADER:
     IMS_PER_BATCH: 1
-    MAX_ITER: 300000
+    MAX_ITER: 1000 #300000
     SHUFFLE: True
     NUM_WORKERS: 1
 
@@ -63,6 +63,6 @@ SOLVER:
     BETA_1: 0.9
     BETA_2: 0.999
     STEPS: (100000, 150000)
-    CHECKPOINT_PERIOD: 5000
+    CHECKPOINT_PERIOD: 10 #5000
     WEIGHT_DECAY: 0.000000
-    EVALUATION_PERIOD: 50000
+    EVALUATION_PERIOD: 10 #50000
