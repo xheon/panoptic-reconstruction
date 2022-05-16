@@ -66,6 +66,25 @@ class PanopticReconstruction(nn.Module):
         losses.update({"frustum": frustum_losses})
         results.update({"frustum": frustum_results})
 
+        # Ablation: "w/ 3D"
+        results["frustum"] = {}
+        points = results["projection"].C
+        sign = torch.sign(results["projection"].F[:, 0])
+        value = results["projection"].F[:, 1]
+        geometry = sign * value
+        results["frustum"]["geometry"] = Me.SparseTensor(features=geometry.unsqueeze(1), coordinates=points)
+        results["frustum"]["instance3d"] = Me.SparseTensor(features=torch.argmax((results["projection"].F[:, 82:] > 0.5).float(), dim=1, keepdim=True), coordinates=points)
+
+        semantics = torch.zeros_like(results["frustum"]["instance3d"].F)
+
+        for position, location in enumerate(results["instance"]["locations"][0]):
+            label = results["instance"]["label"][0][position]
+
+            instance_mask = results["frustum"]["instance3d"].F[:, 0] == location + 1
+            semantics[instance_mask == True] = label
+
+        results["frustum"]["semantic3d_label"] = Me.SparseTensor(semantics, coordinates=points)
+
         if self.get_current_training_stage() == "FULL":
             _, panoptic_results = self.postprocess(instance_results, frustum_results)
             results.update({"panoptic": panoptic_results})
