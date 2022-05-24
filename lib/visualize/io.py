@@ -49,7 +49,7 @@ def write_ply(vertices: Union[np.array, torch.Tensor], colors: Union[np.array, t
         faces = []
 
     with open(output_file, "w") as file:
-        file.write("ply \n")
+        file.write("ply\n")
         file.write("format ascii 1.0\n")
         file.write(f"element vertex {len(vertices):d}\n")
         file.write("property float x\n")
