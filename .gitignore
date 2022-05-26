@@ -3,6 +3,6 @@ preparation
 lib
 data
 output
-.ipynb_checkpoints/
-__pycache__/
+*.ipynb_checkpoints*
+*__pycache__*
 differential_rendering
