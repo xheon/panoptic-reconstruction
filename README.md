@@ -1,7 +1,7 @@
 # Panoptic 3D Scene Reconstruction from a Single RGB Image
 
 
-### [Project Page](https://manuel-dahnert.com/research/panoptic-reconstruction) | [Paper](https://manuel-dahnert.com/static/e9f76636d34de100048d63007b0992b8/dahnert2021panoptic-reconstruction.pdf) | [Arxiv](https://arxiv.org/abs/2111.02444) | [Video](https://www.youtube.com/watch?v=YVxRNHmd5SA)
+### [Project Page](https://manuel-dahnert.com/research/panoptic-reconstruction) | [Paper](https://manuel-dahnert.com/pdf/dahnert2021panoptic-reconstruction.pdf) | [Arxiv](https://arxiv.org/abs/2111.02444) | [Video](https://www.youtube.com/watch?v=YVxRNHmd5SA)
 
 > Panoptic 3D Scene Reconstruction from a Single RGB Image <br />
 > [Manuel Dahnert](https://manuel-dahnert.com), [Ji Hou](https://sekunde.github.io), [Matthias Nießner](https://niessnerlab.org/members/matthias_niessner/profile.html), [Angela Dai](https://www.3dunderstanding.org/team.html) <br />
