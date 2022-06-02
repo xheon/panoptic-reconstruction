@@ -52,13 +52,14 @@ class PanopticReconstruction(nn.Module):
 
         # Instances (Detection & Matching)
         instance_losses, instance_results = self.instance2d(image_features, targets, is_validate)
+
         losses.update({"instance": instance_losses})
         results.update({"instance": instance_results})
 
         # 2D to 3D
         # Projection
         feature2d = results["depth"]["features"]
-        projection_results = self.projection(results["depth"]["prediction"], feature2d, instance_results, targets)
+        projection_results = self.projection(results["depth"]["prediction"], images, feature2d, instance_results, targets)
         results.update({"projection": projection_results})
 
         # 3D
@@ -78,6 +79,9 @@ class PanopticReconstruction(nn.Module):
             "intrinsic": intrinsic
         }
 
+        print("=================================")
+        print("input_img: {}".format(image.shape))
+
         # Inference 2d
         _, image_features = self.encoder2d(image)
 
@@ -90,7 +94,7 @@ class PanopticReconstruction(nn.Module):
         results["instance"] = instance_result
 
         # inference projection
-        projection_result: Me.SparseTensor = self.projection.inference(depth_result, depth_features, instance_result, intrinsic)
+        projection_result: Me.SparseTensor = self.projection.inference(depth_result, image, depth_features, instance_result, intrinsic)
         results["projection"] = projection_result
 
         # inference 3d
@@ -100,6 +104,9 @@ class PanopticReconstruction(nn.Module):
         # Merge geometry, semantics & instances to panoptic output
         _, panoptic_result = self.postprocess(instance_result, frustum_result)
         results["panoptic"] = panoptic_result
+        print("results panoptic_instances: {}".format(results["panoptic"]["panoptic_instances"].shape))
+        print("results panoptic_semantics: {}".format(results["panoptic"]["panoptic_semantics"].shape))
+        print("results frustum_geometry: {}".format(results["frustum"]["geometry"].shape))
 
         return results
 

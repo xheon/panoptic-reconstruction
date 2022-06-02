@@ -26,9 +26,14 @@ class SparseProjection(nn.Module):
         self.voxel_size = config.MODEL.PROJECTION.VOXEL_SIZE
         self.frustum_dimensions = torch.tensor([256, 256, 256])
 
-    def forward(self, depth, features, instances, targets) -> Me.SparseTensor:
+    def forward(self, depth, rgb, features, instances, targets) -> Me.SparseTensor:
         device = depth.device
         batch_size = depth.size(0)
+
+        rgb = F.interpolate(rgb, size=(120,160), mode="bilinear", align_corners=True)
+        print("rgb: {}".format(rgb.shape))
+        print("depth: {}".format(depth.shape))
+
 
         sparse_coordinates = []
         sparse_features = []
@@ -62,6 +67,10 @@ class SparseProjection(nn.Module):
             depth_pixels = torch.stack([xv, yv, depth_pixels_z.float(), torch.ones_like(depth_pixels_z).float()])
             pointcloud = torch.mm(intrinsic_inverse, depth_pixels.float())
             grid_coordinates = torch.mm(camera2frustum, pointcloud).t()[:, :3].contiguous()
+            print("pointcloud: {}".format(pointcloud.shape))
+            print("grid_coordinates: {}".format(grid_coordinates.shape))
+
+
 
             # projective sdf encoding
             # repeat truncation, add / subtract z-offset
@@ -85,13 +94,24 @@ class SparseProjection(nn.Module):
                 sign = torch.sign(df_values)
                 value = torch.abs(df_values)
                 df_values = torch.cat([sign, value], dim=-1)
+            print("df_values: {}".format(df_values.shape))
+
 
             sample_features = []
 
             # image features
             image_features = features[idx, :, depth_pixels_xy[:, 0], depth_pixels_xy[:, 1]]
             image_features = image_features.permute(1, 0)
+            print("features: {}".format(features.shape))
+            print("image_features: {}".format(image_features.shape))
             sample_features.append(image_features)
+
+            # RGB Projection
+            flat_rgb = rgb[idx, :, depth_pixels_xy[:, 0], depth_pixels_xy[:, 1]]
+            flat_rgb = flat_rgb.permute(1, 0)
+            # print("flat_rgb: {}".format(flat_rgb.shape))
+            # sample_features.append(flat_rgb)
+            
 
             # instance features
             mask_logits = instances["raw"]  # use mask logits
@@ -120,6 +140,9 @@ class SparseProjection(nn.Module):
             instance_features = instance_tensor[0, :, depth_pixels_xy[:, 0], depth_pixels_xy[:, 1]]
             instance_features = instance_features.permute(1, 0)
             sample_features.append(instance_features)
+            print("instance_features: {}".format(instance_features.shape))
+            print("instance_tensor: {}".format(instance_tensor.shape))
+
 
             if sample_features:
                 sample_features = torch.cat(sample_features, dim=-1)
@@ -138,6 +161,13 @@ class SparseProjection(nn.Module):
             flat_features = sample_features.view(num_points * num_repetition, -1)
             sparse_coordinates.append(flatten_coordinates)
             sparse_features.append(flat_features)
+            print("sample_features: {}".format(sample_features.shape))
+
+            print("flat_features: {}".format(flat_features.shape))
+
+            print("flatten_coordinates: {}".format(flatten_coordinates.shape))
+
+            
 
         if len(sparse_coordinates) == 0:
             return None
@@ -148,6 +178,12 @@ class SparseProjection(nn.Module):
         tensor = Me.SparseTensor(features=sparse_features,
                                  coordinates=batched_coordinates,
                                  quantization_mode=Me.SparseTensorQuantizationMode.RANDOM_SUBSAMPLE)
+
+        print("sparse_features: {}".format(sparse_features.shape))
+        print("batched_coordinates: {}".format(batched_coordinates.shape))
+        print("tensor: {}".format(tensor.shape))
+
+
 
         return tensor
 
@@ -160,8 +196,8 @@ class SparseProjection(nn.Module):
 
         return padding_offsets
 
-    def inference(self, depth, features, instances, intrinsic) -> Me.SparseTensor:
+    def inference(self, depth, rgb, features, instances, intrinsic) -> Me.SparseTensor:
         data = FieldList(depth.shape[2:])
         data.add_field("depth", DepthMap(depth, intrinsic))
 
-        return self.forward(depth, features, instances, [data])
+        return self.forward(depth, rgb, features, instances, [data])

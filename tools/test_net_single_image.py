@@ -18,7 +18,7 @@ from lib.structures import DepthMap
 import lib.visualize as vis
 from lib.visualize.image import write_detection_image, write_depth
 from lib.structures.frustum import compute_camera2frustum_transform
-
+import time
 
 def main(opts):
     configure_inference(opts)
@@ -28,8 +28,15 @@ def main(opts):
     # Define model and load checkpoint.
     print("Load model...")
     model = modeling.PanopticReconstruction()
+    pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print("Number of Trainable Parameters: {}".format(pytorch_total_params))
+
+    model_dict = model.state_dict()
     checkpoint = torch.load(opts.model)
-    model.load_state_dict(checkpoint["model"])  # load model checkpoint
+    pretrained_dict = checkpoint["model"]
+    model_dict.update(pretrained_dict)
+    # model.load_state_dict(checkpoint["model"])  # load model checkpoint
+    model.load_state_dict(model_dict) # Load pretrained parameters
     model = model.to(device)  # move to gpu
     model.switch_test()
 
@@ -60,9 +67,11 @@ def main(opts):
     front3d_frustum_mask = torch.from_numpy(front3d_frustum_mask).bool().to(device).unsqueeze(0).unsqueeze(0)
 
     print("Perform panoptic 3D scene reconstruction...")
+    start = time.time()
     with torch.no_grad():
         results = model.inference(input_image, front3d_intrinsic, front3d_frustum_mask)
-
+    end = time.time()
+    print("Inference time: {}".format(end - start))
     print(f"Visualize results, save them at {config.OUTPUT_DIR}")
     visualize_results(results, config.OUTPUT_DIR)
 
@@ -102,9 +111,15 @@ def visualize_results(results: Dict[str, Any], output_path: os.PathLike) -> None
     iso_value = config.MODEL.FRUSTUM3D.ISO_VALUE
 
     geometry = results["frustum"]["geometry"]
+
     surface, _, _ = geometry.dense(dense_dimensions, min_coordinates, default_value=truncation)
+    
+    print("surface: {}".format(surface.shape))
+
     instances = results["panoptic"]["panoptic_instances"]
     semantics = results["panoptic"]["panoptic_semantics"]
+    color = results["panoptic"]["color"]
+
 
     # Main outputs
     camera2frustum = compute_camera2frustum_transform(depth_map.intrinsic_matrix.cpu(), torch.tensor(results["input"].size()) / 2.0,
@@ -116,8 +131,8 @@ def visualize_results(results: Dict[str, Any], output_path: os.PathLike) -> None
     # remove padding: original grid size: [256, 256, 256] -> [231, 174, 187]
     camera2frustum[:3, 3] += (torch.tensor([256, 256, 256]) - torch.tensor([231, 174, 187])) / 2
     frustum2camera = torch.inverse(camera2frustum)
-    print(frustum2camera)
     vis.write_distance_field(surface.squeeze(), None, output_path / "mesh_geometry.ply", transform=frustum2camera)
+    vis.write_distance_field(surface.squeeze(), color.squeeze(), output_path / "mesh_color.ply", transform=frustum2camera)
     vis.write_distance_field(surface.squeeze(), instances.squeeze(), output_path / "mesh_instances.ply", transform=frustum2camera)
     vis.write_distance_field(surface.squeeze(), semantics.squeeze(), output_path / "mesh_semantics.ply", transform=frustum2camera)
 

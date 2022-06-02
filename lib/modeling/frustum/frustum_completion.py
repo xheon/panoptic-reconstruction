@@ -8,7 +8,7 @@ import MinkowskiEngine as Me
 
 from lib import modeling
 from lib.config import config
-from lib.modeling.backbone import UNetSparse, GeometryHeadSparse, ClassificationHeadSparse
+from lib.modeling.backbone import UNetSparse, GeometryHeadSparse, ClassificationHeadSparse, ColorHeadSparse
 from lib.structures.field_list import collect
 from lib.modeling.utils import ModuleResult
 
@@ -23,6 +23,7 @@ class FrustumCompletion(nn.Module):
         self.surface_head = None
         self.semantic_head = None
         self.instance_head = None
+        self.color_head = None
 
         self.init_heads("cuda")
 
@@ -64,6 +65,12 @@ class FrustumCompletion(nn.Module):
                                                       config.MODEL.INSTANCE2D.MAX + 1,
                                                       config.MODEL.FRUSTUM3D.SEMANTIC_HEAD.RESNET_BLOCKS)
         self.instance_head = self.instance_head.to(device)
+
+        # Color head
+        self.color_head = ColorHeadSparse(config.MODEL.FRUSTUM3D.UNET_OUTPUT_CHANNELS,
+                                                      3,
+                                                      config.MODEL.FRUSTUM3D.SEMANTIC_HEAD.RESNET_BLOCKS)
+        self.color_head = self.color_head.to(device)
 
     def forward(self, frustum_features: Me.SparseTensor, targets) -> ModuleResult:
         batch_size = len(targets)
@@ -520,8 +527,10 @@ class FrustumCompletion(nn.Module):
 
     def inference(self, frustum_results, frustum_mask):
         # downscale frustum_mask
+        print("======Sparse Generative Completion=======")
         frustum_mask_64 = F.max_pool3d(frustum_mask.float(), kernel_size=2, stride=4).bool()
         unet_output = self.model(frustum_results, 1, frustum_mask_64)
+
         predictions = unet_output.data
         occupancy_prediction = self.occupancy_256_head(predictions[0])
         occupancy_prediction = self.mask_invalid_sparse_voxels(occupancy_prediction)
@@ -538,25 +547,28 @@ class FrustumCompletion(nn.Module):
         surface_values = torch.clamp(surface_prediction.F, 0.0, self.truncation)
         surface_prediction = Me.SparseTensor(surface_values, surface_prediction.C,
                                              coordinate_manager=surface_prediction.coordinate_manager)
-
         instance_prediction = self.instance_head(prediction_pruned)
-
         instance_softmax = Me.MinkowskiSoftmax(dim=1)(instance_prediction)
         instance_labels = Me.SparseTensor(torch.argmax(instance_softmax.F, 1).unsqueeze(1),
                                           coordinate_map_key=instance_prediction.coordinate_map_key,
                                           coordinate_manager=instance_prediction.coordinate_manager)
 
         semantic_prediction = self.semantic_head(prediction_pruned)
-
         semantic_softmax = Me.MinkowskiSoftmax(dim=1)(semantic_prediction)
         semantic_labels = Me.SparseTensor(torch.argmax(semantic_softmax.F, 1).unsqueeze(1),
                                           coordinate_map_key=semantic_prediction.coordinate_map_key,
                                           coordinate_manager=semantic_prediction.coordinate_manager)
 
+        color_prediction = self.color_head(prediction_pruned)
+        color_values = torch.clamp(color_prediction.F, 0.0, 255.0)
+        color_prediction = Me.SparseTensor(color_values, color_prediction.C,
+                                             coordinate_manager=color_prediction.coordinate_manager)
+
         frustum_result = {
             "geometry": surface_prediction,
             "instance3d": instance_labels,
-            "semantic3d_label": semantic_labels
+            "semantic3d_label": semantic_labels,
+            "color": semantic_labels
         }
 
         return frustum_result
