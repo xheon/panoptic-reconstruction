@@ -31,8 +31,8 @@ class SparseProjection(nn.Module):
         batch_size = depth.size(0)
 
         rgb = F.interpolate(rgb, size=(120,160), mode="bilinear", align_corners=True)
-        print("rgb: {}".format(rgb.shape))
-        print("depth: {}".format(depth.shape))
+        # print("rgb: {}".format(rgb.shape))
+        # print("depth: {}".format(depth.shape))
 
 
         sparse_coordinates = []
@@ -67,8 +67,8 @@ class SparseProjection(nn.Module):
             depth_pixels = torch.stack([xv, yv, depth_pixels_z.float(), torch.ones_like(depth_pixels_z).float()])
             pointcloud = torch.mm(intrinsic_inverse, depth_pixels.float())
             grid_coordinates = torch.mm(camera2frustum, pointcloud).t()[:, :3].contiguous()
-            print("pointcloud: {}".format(pointcloud.shape))
-            print("grid_coordinates: {}".format(grid_coordinates.shape))
+            # print("pointcloud: {}".format(pointcloud.shape))
+            # print("grid_coordinates: {}".format(grid_coordinates.shape))
 
 
 
@@ -94,7 +94,7 @@ class SparseProjection(nn.Module):
                 sign = torch.sign(df_values)
                 value = torch.abs(df_values)
                 df_values = torch.cat([sign, value], dim=-1)
-            print("df_values: {}".format(df_values.shape))
+            # print("df_values: {}".format(df_values.shape))
 
 
             sample_features = []
@@ -102,15 +102,15 @@ class SparseProjection(nn.Module):
             # image features
             image_features = features[idx, :, depth_pixels_xy[:, 0], depth_pixels_xy[:, 1]]
             image_features = image_features.permute(1, 0)
-            print("features: {}".format(features.shape))
-            print("image_features: {}".format(image_features.shape))
+            # print("features: {}".format(features.shape))
+            # print("image_features: {}".format(image_features.shape))
             sample_features.append(image_features)
 
             # RGB Projection
             flat_rgb = rgb[idx, :, depth_pixels_xy[:, 0], depth_pixels_xy[:, 1]]
             flat_rgb = flat_rgb.permute(1, 0)
             # print("flat_rgb: {}".format(flat_rgb.shape))
-            # sample_features.append(flat_rgb)
+            sample_features.append(flat_rgb)
             
 
             # instance features
@@ -140,8 +140,8 @@ class SparseProjection(nn.Module):
             instance_features = instance_tensor[0, :, depth_pixels_xy[:, 0], depth_pixels_xy[:, 1]]
             instance_features = instance_features.permute(1, 0)
             sample_features.append(instance_features)
-            print("instance_features: {}".format(instance_features.shape))
-            print("instance_tensor: {}".format(instance_tensor.shape))
+            # print("instance_features: {}".format(instance_features.shape))
+            # print("instance_tensor: {}".format(instance_tensor.shape))
 
 
             if sample_features:
@@ -161,11 +161,11 @@ class SparseProjection(nn.Module):
             flat_features = sample_features.view(num_points * num_repetition, -1)
             sparse_coordinates.append(flatten_coordinates)
             sparse_features.append(flat_features)
-            print("sample_features: {}".format(sample_features.shape))
+            # print("sample_features: {}".format(sample_features.shape))
 
-            print("flat_features: {}".format(flat_features.shape))
+            # print("flat_features: {}".format(flat_features.shape))
 
-            print("flatten_coordinates: {}".format(flatten_coordinates.shape))
+            # print("flatten_coordinates: {}".format(flatten_coordinates.shape))
 
             
 
@@ -179,9 +179,9 @@ class SparseProjection(nn.Module):
                                  coordinates=batched_coordinates,
                                  quantization_mode=Me.SparseTensorQuantizationMode.RANDOM_SUBSAMPLE)
 
-        print("sparse_features: {}".format(sparse_features.shape))
-        print("batched_coordinates: {}".format(batched_coordinates.shape))
-        print("tensor: {}".format(tensor.shape))
+        # print("sparse_features: {}".format(sparse_features.shape))
+        # print("batched_coordinates: {}".format(batched_coordinates.shape))
+        # print("tensor: {}".format(tensor.shape))
 
 
 

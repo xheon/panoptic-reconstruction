@@ -67,9 +67,10 @@ class PanopticReconstruction(nn.Module):
         losses.update({"frustum": frustum_losses})
         results.update({"frustum": frustum_results})
 
-        if self.get_current_training_stage() == "FULL":
-            _, panoptic_results = self.postprocess(instance_results, frustum_results)
-            results.update({"panoptic": panoptic_results})
+        # TODO : reactivate postprocess
+        # if self.get_current_training_stage() == "FULL":
+        #     _, panoptic_results = self.postprocess(instance_results, frustum_results)
+        #     results.update({"panoptic": panoptic_results})
 
         return losses, results
 

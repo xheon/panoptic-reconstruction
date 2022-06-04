@@ -31,8 +31,9 @@ class UNetSparse(nn.Module):
         self.model = block
 
     def forward(self, x: torch.Tensor, batch_size, frustum_mask) -> BlockContent:
+        # print("\n\nUNetSparse input shape:", x.shape)
         output = self.model(BlockContent(x, frustum_mask), batch_size)
-
+        
         return output
 
 
@@ -141,6 +142,17 @@ class UNetBlockOuterSparse(UNetBlock):
             SparseBasicBlock(self.num_instance_features, num_inner_features, dimension=3, downsample=instance_downsample)
         )
 
+        # define rgb color encoder
+        num_encoders += 1
+        self.num_rgb_channels = 3
+        rgb_downsample = nn.Sequential(
+            Me.MinkowskiConvolution(self.num_rgb_channels, num_inner_features, kernel_size=1, stride=1, bias=True, dimension=3),
+            Me.MinkowskiInstanceNorm(num_inner_features)
+        )
+        self.encoder_rgb = nn.Sequential(
+            SparseBasicBlock(self.num_rgb_channels, num_inner_features, dimension=3, downsample=rgb_downsample)
+        )
+
         num_combined_encoder_features = num_encoders * num_inner_features
         encoder_downsample = nn.Sequential(
             Me.MinkowskiConvolution(num_combined_encoder_features, num_inner_features, kernel_size=4, stride=2, bias=True, dimension=3),
@@ -166,10 +178,20 @@ class UNetBlockOuterSparse(UNetBlock):
             Me.MinkowskiConvolution(num_proxy_input_features, self.num_semantic_features, kernel_size=3, stride=1, bias=True, dimension=3)
         )
 
+        self.num_rgb_features = config.MODEL.FRUSTUM3D.NUM_CLASSES 
+        self.proxy_rgb_128_head = nn.Sequential(
+            SparseBasicBlock(num_proxy_input_features, num_proxy_input_features, dimension=3),
+            Me.MinkowskiConvolution(num_proxy_input_features, self.num_rgb_channels, kernel_size=3, stride=1, bias=True, dimension=3)
+        )
+
         # define decoder
         num_conv_input_features = num_outer_features + num_inner_features
         num_conv_input_features += self.num_instance_features
         num_conv_input_features += self.num_semantic_features
+        num_conv_input_features += self.num_rgb_channels
+
+        # num_conv_input_features += self.num_rgb_channels
+
 
         self.decoder = nn.Sequential(
             Me.MinkowskiConvolutionTranspose(num_conv_input_features, num_output_features, kernel_size=4, stride=2, bias=False, dimension=3, expand_coordinates=True),
@@ -184,7 +206,6 @@ class UNetBlockOuterSparse(UNetBlock):
 
         # process each input feature type individually
         # concat all processed features and process with another encoder
-
         # process depth features
         start_features = 0
         end_features = self.num_depth_features
@@ -210,6 +231,17 @@ class UNetBlockOuterSparse(UNetBlock):
 
         encoded_input = Me.cat(encoded_input, encoded_instances)
 
+        # process color features
+        start_features = end_features
+        end_features += self.num_rgb_channels
+
+        features_rgb = Me.SparseTensor(content.F[:, start_features:end_features], coordinate_manager=cm, coordinate_map_key=key)
+        encoded_rgb = self.encoder_rgb(features_rgb) if not self.verbose else self.forward_verbose(features_rgb, self.encoder_rgb)
+        
+
+        encoded_input = Me.cat(encoded_input, encoded_rgb)
+
+
         # process input features
         encoded = self.encoder(encoded_input) if not self.verbose else self.forward_verbose(encoded_input, self.encoder)
 
@@ -221,12 +253,15 @@ class UNetBlockOuterSparse(UNetBlock):
 
         sparse, dense = processed.data
 
+        
+
         if sparse is not None:
             sparse = Me.SparseTensor(sparse.F, sparse.C, coordinate_manager=cm, tensor_stride=sparse.tensor_stride)
-
+            # print("sparse", sparse.shape)
         # proxy occupancy output
         if sparse is not None:
             proxy_output = self.proxy_occupancy_128_head(sparse)
+            # print("proxy_output: ", proxy_output.shape)
         else:
             proxy_output = None
 
@@ -234,17 +269,19 @@ class UNetBlockOuterSparse(UNetBlock):
 
         if should_concat:
             proxy_mask = (Me.MinkowskiSigmoid()(proxy_output).F > config.MODEL.FRUSTUM3D.SPARSE_THRESHOLD_128).squeeze(1)
-
+            # print("proxy_mask: ", proxy_mask.shape)
             # no valid voxels
             if proxy_mask.sum() == 0:
                 cat = None
                 proxy_instances = None
                 proxy_semantic = None
+                proxy_rgb = None
+
             else:
                 sparse_pruned = Me.MinkowskiPruning()(sparse, proxy_mask)  # mask out invalid voxels
-
+                # print("sparse_pruned: ", sparse_pruned.shape)
                 if len(sparse_pruned.C) == 0:
-                    return BlockContent([None, [proxy_output, None, None], dense], processed.encoding)
+                    return BlockContent([None, [proxy_output, None, None, None], dense], processed.encoding)
 
                 # Skip connection
                 cat = utils.sparse_cat_union(encoded, sparse_pruned)
@@ -252,10 +289,14 @@ class UNetBlockOuterSparse(UNetBlock):
                 # instance proxy prediction
                 proxy_instances = self.proxy_instance_128_head(cat)
                 proxy_semantic = self.proxy_semantic_128_head(cat)
+                #color pproxy prediction
+                proxy_rgb = self.proxy_rgb_128_head(cat)
 
                 # Concat proxy outputs
                 cat = utils.sparse_cat_union(cat, proxy_instances)
                 cat = utils.sparse_cat_union(cat, proxy_semantic)
+                cat = utils.sparse_cat_union(cat, proxy_rgb)
+
 
             if not config.MODEL.FRUSTUM3D.IS_LEVEL_128 and proxy_output is not None:
                 output = self.decoder(cat) if not self.verbose else self.forward_verbose(cat, self.decoder)
@@ -267,11 +308,12 @@ class UNetBlockOuterSparse(UNetBlock):
             output = None
             proxy_instances = None
             proxy_semantic = None
+            proxy_rgb = None
 
         if self.verbose:
             self.verbose = False
 
-        return BlockContent([output, [proxy_output, proxy_instances, proxy_semantic], dense], processed.encoding)
+        return BlockContent([output, [proxy_output, proxy_instances, proxy_semantic, proxy_rgb], dense], processed.encoding)
 
 
 class UNetBlockInner(UNetBlock):
@@ -361,9 +403,17 @@ class UNetBlockHybridSparse(UNetBlockOuter):
             nn.Conv3d(num_inner_features * 2, config.MODEL.FRUSTUM3D.NUM_CLASSES, kernel_size=3, stride=1, padding=1, bias=True)
         )
 
+        self.proxy_rgb_head = nn.Sequential(
+            ResNetBlock3d(num_inner_features * 2, num_inner_features * 2),
+            ResNetBlock3d(num_inner_features * 2, num_inner_features * 2),
+            nn.Conv3d(num_inner_features * 2, 3, kernel_size=3, stride=1, padding=1, bias=True)
+        )
+
         num_conv_input_features = num_outer_features
         num_conv_input_features += config.MODEL.INSTANCE2D.MAX + 1
         num_conv_input_features += config.MODEL.FRUSTUM3D.NUM_CLASSES
+        num_conv_input_features += 3
+
 
         self.decoder = nn.Sequential(
             Me.MinkowskiConvolutionTranspose(num_conv_input_features, num_output_features, kernel_size=4, stride=2, bias=False, dimension=3, expand_coordinates=True), Me.MinkowskiInstanceNorm(num_output_features),
@@ -416,7 +466,12 @@ class UNetBlockHybridSparse(UNetBlockOuter):
         semantic_prediction = torch.masked_fill(semantic_prediction, frustum_mask.squeeze() == False, 0.0)
         semantic_prediction[:, 0] = torch.masked_fill(semantic_prediction[:, 0], frustum_mask.squeeze() == False, 1.0)
 
-        proxy_output = [proxy_output, instance_prediction, semantic_prediction]
+        # rgb proxy
+        rgb_prediction = self.proxy_rgb_head(processed.data)
+        rgb_prediction = torch.masked_fill(rgb_prediction, frustum_mask.squeeze() == False, 0.0)
+        rgb_prediction[:, 0] = torch.masked_fill(rgb_prediction[:, 0], frustum_mask.squeeze() == False, 1.0)
+
+        proxy_output = [proxy_output, instance_prediction, semantic_prediction, rgb_prediction]
 
         if not config.MODEL.FRUSTUM3D.IS_LEVEL_64:
             coordinates, _, _ = transforms3d.Sparsify()(dense_to_sparse_mask, features=processed.data)
@@ -429,6 +484,9 @@ class UNetBlockHybridSparse(UNetBlockOuter):
 
             if semantic_prediction is not None:
                 dense_features = torch.cat([dense_features, semantic_prediction], dim=1)
+
+            if rgb_prediction is not None:
+                dense_features = torch.cat([dense_features, rgb_prediction], dim=1)
 
             sparse_features = dense_features[locations[:, 0], :, locations[:, 1], locations[:, 2], locations[:, 3]]
 

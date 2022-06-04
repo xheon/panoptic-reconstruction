@@ -37,12 +37,12 @@ class PostProcess(nn.Module):
         geometry, _, _ = frustum_data["geometry"].dense(dense_dimensions, min_coordinates, default_value=truncation)
         instances, _, _ = frustum_data["instance3d"].dense(dense_dimensions, min_coordinates)
         semantics, _, _ = frustum_data["semantic3d_label"].dense(dense_dimensions, min_coordinates)
-        color, _, _ = frustum_data["color"].dense(dense_dimensions, min_coordinates)
+        rgb, _, _ = frustum_data["rgb"].dense(dense_dimensions, min_coordinates)
 
         print("geometry: {}".format(geometry.shape))
         print("instances: {}".format(instances.shape))
         print("semantics: {}".format(semantics.shape))
-        print("color: {}".format(color.shape))
+        print("rgb: {}".format(rgb.shape))
 
 
 
@@ -50,7 +50,7 @@ class PostProcess(nn.Module):
         geometry = geometry.squeeze()
         instances = instances.squeeze()
         semantics = semantics.squeeze()
-        color = color.squeeze()
+        rgb = rgb.squeeze()
 
 
         # filter 3d instances by 2d instances
@@ -122,9 +122,9 @@ class PostProcess(nn.Module):
             instance_mask = panoptic_instances == instance_id
             panoptic_semantics[instance_mask] = semantic_label
         
-        print("color: {}".format(color.shape))
+        print("rgb: {}".format(rgb.shape))
         result = {"panoptic_instances": panoptic_instances, "panoptic_semantics": panoptic_semantics,
-                  "panoptic_semantic_mapping": panoptic_semantic_mapping, "color": color}
+                  "panoptic_semantic_mapping": panoptic_semantic_mapping, "rgb": rgb}
 
         return {}, result
 

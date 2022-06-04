@@ -108,7 +108,23 @@ class Checkpointer:
         return torch.load(f, map_location=torch.device("cpu"))
 
     def _load_model(self, checkpoint):
-        load_state_dict(self.model, checkpoint.pop("model"))
+        model_dict = self.model.state_dict()
+        pytorch_total_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        print("Number of Trainable Parameters: {}".format(pytorch_total_params))
+
+        # print('\n\nmodel: ',model_dict.keys())
+        
+        # Remove dicts of modules whose size has been modified to avoid conflicts
+        pretrained_model = checkpoint.pop("model")
+        pretrained_model.pop("frustum3d.model.model.encoder.0.conv1.kernel")
+        pretrained_model.pop("frustum3d.model.model.encoder.0.downsample.0.kernel")
+        pretrained_model.pop("frustum3d.model.model.decoder.0.kernel")
+        pretrained_model.pop("frustum3d.model.model.submodule.decoder.0.kernel")
+
+
+        # pretrained_dict.pop('')
+        # print('\n\ncheckpont: ',checkpoint.pop("model").keys())
+        load_state_dict(self.model, pretrained_model)
 
 
 class DetectronCheckpointer(Checkpointer):
