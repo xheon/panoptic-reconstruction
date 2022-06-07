@@ -28,6 +28,8 @@ MODEL:
         COMPLETION_128_WEIGHT: 25.0
         COMPLETION_256_WEIGHT: 10.0
         L1_WEIGHT: 5.0
+        RGB_WEIGHT: 100.0
+
  
         LEVEL_ITERATIONS_64: 10 # 10000
         LEVEL_ITERATIONS_128: 25 # 25000
@@ -50,7 +52,7 @@ DATASETS:
     NUM_TEST: 100
     NUM_VALIDATE: 50
     OVERFITTING: False
-    FIELDS: ("color", "depth", "instance2d", "geometry", "instance3d", "semantic3d")
+    FIELDS: ("color", "depth", "instance2d", "geometry", "instance3d", "semantic3d", "aux_views")
 
 DATALOADER:
     IMS_PER_BATCH: 1

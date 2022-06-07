@@ -5,6 +5,27 @@
 # LICENSE file in the root directory of this source tree.
 
 import matplotlib.pyplot as plt
+import numpy as np
+def plot_image(img):
+    major_ticks = np.arange(0, 320, 40)
+    minor_ticks = np.arange(0, 320, 20)
+
+    major_ticksy = np.arange(0, 240, 40)
+    minor_ticksy = np.arange(0, 240, 20)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.grid(True)
+    ax.imshow(img)
+    circle1 = plt.Circle((160, 120), 5, color='g')
+    ax.add_patch(circle1)
+
+    ax.set_xticks(major_ticks)
+    ax.set_xticks(minor_ticks, minor=True)
+    ax.set_yticks(major_ticksy)
+    ax.set_yticks(minor_ticksy, minor=True)
+    ax.grid(which='minor', alpha=0.2)
+    ax.grid(which='major', alpha=0.5)
+    plt.show()
 
 
 def image_grid(

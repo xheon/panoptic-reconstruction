@@ -192,6 +192,7 @@ _C.MODEL.FRUSTUM3D.COMPLETION_128_WEIGHT = 10.0
 _C.MODEL.FRUSTUM3D.COMPLETION_256_WEIGHT = 5.0
 
 _C.MODEL.FRUSTUM3D.L1_WEIGHT = 5.0
+_C.MODEL.FRUSTUM3D.RGB_WEIGHT = 25.0
 _C.MODEL.FRUSTUM3D.INSTANCE_WEIGHT = 25.0
 _C.MODEL.FRUSTUM3D.SEMANTIC_WEIGHT = 10.0
 
@@ -238,7 +239,7 @@ _C.DATASETS.MAPPING = "datagen/front3d/nyu40labels_suncg.csv"
 
 _C.DATASETS.FRUSTUM_DIMENSIONS = [256, 256, 256]
 
-_C.DATASETS.FIELDS = ["color", "depth", "instances2d", "geometry"]
+_C.DATASETS.FIELDS = ["color", "depth", "instances2d", "geometry", "aux_views"]
 
 # List of the dataset names for training, as present in paths_catalog.py
 _C.DATASETS.TRAIN = ""

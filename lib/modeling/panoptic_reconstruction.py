@@ -157,6 +157,9 @@ class PanopticReconstruction(nn.Module):
 
         if config.MODEL.INSTANCE2D.FIX:
             self.instance2d.eval()
+        
+        # if config.MODEL.RGB.FIX:
+        #     self.rgb.eval()
 
     def switch_test(self) -> None:
         self.eval()

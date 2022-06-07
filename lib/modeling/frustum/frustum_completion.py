@@ -11,7 +11,7 @@ from lib.config import config
 from lib.modeling.backbone import UNetSparse, GeometryHeadSparse, ClassificationHeadSparse, ColorHeadSparse
 from lib.structures.field_list import collect
 from lib.modeling.utils import ModuleResult
-
+from .rgb_loss import RGBLoss
 
 class FrustumCompletion(nn.Module):
     def __init__(self):
@@ -40,6 +40,7 @@ class FrustumCompletion(nn.Module):
         self.criterion_surface = F.l1_loss
         self.criterion_semantics = F.cross_entropy  #nn.CrossEntropyLoss(reduction="none")
         self.criterion_instances = F.cross_entropy  #nn.CrossEntropyLoss(reduction="none")
+        self.rgb_loss = RGBLoss()
 
         self.truncation = config.MODEL.FRUSTUM3D.TRUNCATION
         self.frustum_dimensions = [256, 256, 256]
@@ -463,9 +464,11 @@ class FrustumCompletion(nn.Module):
         # print("rgb_prediction shape: ", rgb_prediction.shape)
         if rgb_prediction is not None:
             # rgb_ground_truth: torch.LongTensor = collect(targets, "rgb").long().squeeze(1)
-            rgb_loss, rgb_result = self.compute_rgb_loss(rgb_prediction, None, weighting_mask)
+            rgb_loss, rgb_result = self.compute_rgb_loss(rgb_prediction, targets, hierarchy_results, weighting_mask)
             # hierarchy_losses.update(rgb_loss)
             hierarchy_results.update(rgb_result)
+            hierarchy_losses.update(rgb_loss)
+
 
         return hierarchy_losses, hierarchy_results
 
@@ -559,8 +562,17 @@ class FrustumCompletion(nn.Module):
         return {"semantic3d": loss_weighted}, {"semantic3d": semantic_softmax, "semantic3d_label": semantic_labels}
 
 
-    def compute_rgb_loss(self, prediction: Me.SparseTensor, ground_truth: torch.Tensor,
+    def compute_rgb_loss(self, prediction: Me.SparseTensor, targets, results,
                          weighting_mask: torch.Tensor) -> Tuple[Dict, Dict]:
+
+        # Grount truth
+        aux_views = collect(targets, "aux_views")
+        cam_poses = collect(targets, "cam_poses")
+
+        # print("aux_views", aux_views.shape)
+        # print("cam_poses", cam_poses.shape)
+
+
         prediction = self.mask_invalid_sparse_voxels(prediction)
 
         predicted_coordinates = prediction.C.long()
@@ -583,12 +595,16 @@ class FrustumCompletion(nn.Module):
 
         # loss_weighted = loss_mean * config.MODEL.FRUSTUM3D.RGB_WEIGHT
 
-        rgb_values = torch.clamp(prediction.F, 0.0, 255.0)
+        rgb_values = torch.clamp(prediction.F, 0.0, 1.0)
         rgb_prediction = Me.SparseTensor(rgb_values, prediction.C,
                                              coordinate_manager=prediction.coordinate_manager)
+        # print(results.keys())
+        geometry_prediction = results['geometry']
+        # print("\ngeometry_sparse shape: ", geometry_prediction.shape)
+        # print("rgb_sparse shape: ", rgb_prediction.shape)
 
-
-        return {"rgb": 0.0}, {"rgb": rgb_prediction}
+        loss = self.rgb_loss(geometry_prediction, rgb_prediction, aux_views, cam_poses)*config.MODEL.FRUSTUM3D.RGB_WEIGHT
+        return {"rgb": loss}, {"rgb": rgb_prediction}
 
 
     def mask_invalid_sparse_voxels(self, grid: Me.SparseTensor) -> Me.SparseTensor:

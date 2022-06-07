@@ -15,6 +15,7 @@ from lib.data import transforms3d as t3d
 from lib.structures import FieldList
 from lib.config import config
 from lib.utils.intrinsics import adjust_intrinsic
+import torch
 
 _imagenet_stats = {'mean': [0.485, 0.456, 0.406], 'std': [0.229, 0.224, 0.225]}
 
@@ -128,6 +129,24 @@ class Front3D(torch.utils.data.Dataset):
                     # process instance3d hierarchy
                     sample.add_field("instance3d_64", self.transforms["segmentation3d_64"](instance3d))
                     sample.add_field("instance3d_128", self.transforms["segmentation3d_128"](instance3d))
+            
+            if "aux_views" in self.fields:
+                aux_views = []
+                cam_poses = []
+                aux_ids = ["0001", "0005", "0018", "0021"]
+                for aux_img_id in aux_ids:
+                    aux_img = Image.open(self.dataset_root_path / scene_id / f"rgb_{aux_img_id}.png", formats=["PNG"])
+                    aux_img = self.transforms["aux_views"](aux_img)
+                    # aux_image = t2d.ToTensor(aux_img)
+                    # print("aux_image range: [{},{}]".format(torch.min(aux_img), torch.max(aux_img)))
+                    aux_views.append(aux_img)
+
+                    campose_path = self.dataset_root_path / scene_id / f"campose_{aux_img_id}.npz"
+                    cam2world = np.load(campose_path)["camera2world"]
+                    cam_poses.append(torch.from_numpy(cam2world).type(torch.FloatTensor).unsqueeze(0))
+                sample.add_field("aux_views", torch.stack(aux_views))
+                sample.add_field("cam_poses", torch.stack(cam_poses))
+
 
             if needs_weighting:
                 weighting_path = self.dataset_root_path / scene_id / f"weighting_{image_id}.npz"
@@ -169,6 +188,11 @@ class Front3D(torch.utils.data.Dataset):
         transforms = dict()
 
         # 2D transforms
+
+        transforms["aux_views"] = t2d.Compose([
+            t2d.ToTensor(),
+        ])
+
         transforms["color"] = t2d.Compose([
             t2d.ToTensor(),
             t2d.Normalize(_imagenet_stats["mean"], _imagenet_stats["std"])
