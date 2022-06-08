@@ -14,7 +14,7 @@ class WarmupMultiStepLR(torch.optim.lr_scheduler._LRScheduler):
         milestones,
         gamma=0.1,
         warmup_factor=1.0 / 3,
-        warmup_iters=500,
+        warmup_iters=50, #TODO change to old value
         warmup_method="linear",
         last_epoch=-1,
     ):
