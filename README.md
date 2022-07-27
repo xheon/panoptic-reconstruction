@@ -60,7 +60,7 @@ python setup.py install
 ```
 
 ## Inference
-To run the method on a 3D-Front sample run `python tools/test_nest_single_image.py` with the pre-trained checkpoint (see table below).
+To run the method on a 3D-Front sample run `python tools/test_net_single_image.py` with the pre-trained checkpoint (see table below).
 
 ```
 python tools/test_nest_single_image.py -i <path_to_input_image> -o <output_path>
