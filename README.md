@@ -83,7 +83,6 @@ We provide the preprocessed 3D-Front data, please see the following table for li
 Extract the downloaded data into ``data/front3d/`` or adjust the root data path ``lib/config/paths_catalog.py``.  
 By downloading our derived work from the original 3D-Front you accept their original [Terms of Use](https://gw.alicdn.com/bao/uploaded/TB1ZJUfK.z1gK0jSZLeXXb9kVXa.pdf).
 
-**Note:** Current Chromium-based browsers block downloads from non-https pages originating from https pages. If nothing happens when you click on the link, you can open the link in a new tab instead.
 
 | **File**                        | **Description**                                                                                                                                                                       | **Num. Samples** | **Size** | **Version** | **Link** |
 |---------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------:|---------:|------------:|----------|
