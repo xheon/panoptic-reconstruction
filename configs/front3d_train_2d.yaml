@@ -1,0 +1,69 @@
+MODEL:
+    FIX2D: False
+    PRETRAIN: ""
+
+    FIXNORM: False
+
+    BACKBONE:
+        CONV_BODY: "R-18"
+        PRETRAIN: True
+
+    DEPTH2D:
+        USE: True
+        FIX: False
+
+
+    INSTANCE2D:
+        USE: True
+        FIX: False
+        FPN: False
+        RPN:
+            SCORE_THRESH: 0.5
+            NMS_THRESH: 0.3
+            ANCHOR_STRIDE: (16,)
+            ANCHOR_SIZES: (32, 64, 128, 256, 512)
+        ROI_HEADS:
+            USE: True
+            NMS: 0.3
+            SCORE_THRESH: 0.3
+            ROI_BOX_HEAD:
+                POOLER_SCALES: (0.0625,)
+                NUM_CLASSES: 13
+            ROI_MASK_HEAD:
+                USE: True
+                POOLER_SCALES: (0.0625,)
+                SHARE_BOX_FEATURE_EXTRACTOR: False
+
+    PROJECTION:
+        USE: False
+
+    FRUSTUM3D:
+        USE: False
+        FIX: False
+
+DATASETS:
+    TRAIN: "Front3D_Train"
+    VAL: "Front3D_Validation"
+    TRAINVAL: "Front3D_Train"
+    TEST: "Front3D_Test"
+    NUM_TRAIN: 0
+    NUM_TEST: 100
+    NUM_VALIDATE: 50
+    OVERFITTING: False
+    FIELDS: ("color", "depth", "instance2d")
+
+DATALOADER:
+    IMS_PER_BATCH: 8
+    MAX_ITER: 500000
+    SHUFFLE: True
+    NUM_WORKERS: 8
+
+SOLVER:
+    BASE_LR: 0.0001
+    BETA_1: 0.9
+    BETA_2: 0.999
+    STEPS: (250000, 350000)
+    CHECKPOINT_PERIOD: 5000
+    WEIGHT_DECAY: 0.000000
+    EVALUATION_PERIOD: 50000
+
