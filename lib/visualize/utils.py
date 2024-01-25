@@ -51,6 +51,52 @@ def create_color_palette():
         (100, 85, 144),
         (172, 172, 172),
     ]
+    
+def get_class_labels():
+    return [
+        "",
+        "wall",		# wall
+        "floor",		# floor
+        "cabinet", 		# cabinet
+        "bed",		# bed
+        "chair", 		# chair
+        "sofa",  		# sofa
+        "table",		# table
+        "door",  		# door
+        "window",		# window
+        "bookshelf",		# bookshelf
+        "picture",		# picture
+        "counter", 		# counter
+        "",
+        "desk",		# desk
+        "",
+        "curtain",		# curtain
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "refrigerator", 		# refrigerator
+        "",
+        "",
+        "",
+        "shower curtain",		# shower curtain
+        "",
+        "",
+        "",
+        "",
+        "toilet",  		# toilet
+        "sink",		# sink
+        "",
+        "bathtub",		# bathtub
+        "",
+        "",
+        "",  		# otherfurn
+        "",
+        "",
+    ]
 
 
 def lookup_colors(labels: np.array, color_palette: List = None) -> np.array:

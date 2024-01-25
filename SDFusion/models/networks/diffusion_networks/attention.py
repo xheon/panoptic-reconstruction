@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch import nn, einsum
 from einops import rearrange, repeat
 
-from models.networks.diffusion_networks.ldm_diffusion_util import checkpoint
+from SDFusion.models.networks.diffusion_networks.ldm_diffusion_util import checkpoint
 
 def exists(val):
     return val is not None

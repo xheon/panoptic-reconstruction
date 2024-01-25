@@ -14,7 +14,7 @@ import torch.nn.functional as F
 
 # from ldm.modules.diffusionmodules.util import (
 # from external.ldm.modules.diffusionmodules.util import (
-from models.networks.diffusion_networks.ldm_diffusion_util import (
+from SDFusion.models.networks.diffusion_networks.ldm_diffusion_util import (
     checkpoint,
     conv_nd,
     linear,
@@ -25,7 +25,7 @@ from models.networks.diffusion_networks.ldm_diffusion_util import (
 )
 
 # from external.ldm.modules.attention import SpatialTransformer, SpatialTransformer3D
-from models.networks.diffusion_networks.attention import SpatialTransformer, SpatialTransformer3D
+from SDFusion.models.networks.diffusion_networks.attention import SpatialTransformer, SpatialTransformer3D
 
 
 # dummy replace

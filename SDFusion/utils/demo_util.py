@@ -7,12 +7,12 @@ from PIL import Image
 import torch
 import torchvision.utils as vutils
 
-from datasets.base_dataset import CreateDataset
-from datasets.dataloader import CreateDataLoader, get_data_generator
+from SDFusion.datasets.base_dataset import CreateDataset
+from SDFusion.datasets.dataloader import CreateDataLoader, get_data_generator
 
-from models.base_model import create_model
+from SDFusion.models.base_model import create_model
 
-from utils.util import seed_everything
+from SDFusion.utils.util import seed_everything
 
 def tensor_to_pil(tensor):
     # """ assume shape: c h w """
@@ -191,15 +191,15 @@ class SDFusionMM2ShapeOpt(BaseOpt):
         
     def init_model_args(
             self,
-            ckpt_path='saved_ckpt/sdfusion-mm2shape.pth',
-            vq_ckpt_path='saved_ckpt/vqvae-snet-all.pth',
+            ckpt_path='SDFusion/saved_ckpt/sdfusion-mm2shape.pth',
+            vq_ckpt_path='SDFusion/saved_ckpt/vqvae-snet-all.pth',
         ):
         self.model = 'sdfusion-mm2shape'
-        self.df_cfg = 'configs/sdfusion-mm2shape.yaml'
+        self.df_cfg = 'SDFusion/configs/sdfusion-mm2shape.yaml'
         self.ckpt = ckpt_path
         
         self.vq_model = 'vqvae'
-        self.vq_cfg = 'configs/vqvae_snet.yaml'
+        self.vq_cfg = 'SDFusion/configs/vqvae_snet.yaml'
         self.vq_ckpt = vq_ckpt_path
         self.vq_dset = 'snet'
         self.vq_cat = 'all'

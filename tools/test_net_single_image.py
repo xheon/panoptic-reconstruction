@@ -16,7 +16,7 @@ from lib.utils.intrinsics import adjust_intrinsic
 from lib.structures import DepthMap
 
 import lib.visualize as vis
-from lib.visualize.image import write_detection_image, write_depth
+from lib.visualize.image import write_detection_image, write_depth, write_masks
 from lib.structures.frustum import compute_camera2frustum_transform
 
 
@@ -56,7 +56,7 @@ def main(opts):
     front3d_intrinsic = torch.from_numpy(front3d_intrinsic).to(device).float()
 
     # Prepare frustum mask.
-    front3d_frustum_mask = np.load(str("data/frustum_mask.npz"))["mask"]
+    front3d_frustum_mask = np.load(str("data/front3d/frustum_mask.npz"))["mask"]
     front3d_frustum_mask = torch.from_numpy(front3d_frustum_mask).bool().to(device).unsqueeze(0).unsqueeze(0)
 
     print("Perform panoptic 3D scene reconstruction...")
@@ -90,7 +90,8 @@ def visualize_results(results: Dict[str, Any], output_path: os.PathLike) -> None
     write_depth(depth_map, output_path / "depth_map.png")
 
     # Visualize 2D detections
-    # write_detection_image(results["input"], results["instance"], output_path / "detection.png")
+    #write_detection_image(results["input"], results["instance"], output_path / "detection.png")
+    write_masks(results["input"], results["instance"], output_path)
 
     # Visualize projection
     vis.write_pointcloud(results["projection"].C[:, 1:], None, output_path / "projection.ply")

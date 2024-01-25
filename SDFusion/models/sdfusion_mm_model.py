@@ -19,28 +19,28 @@ from torch import nn, optim
 import torchvision.utils as vutils
 import torchvision.transforms as transforms
 
-from models.base_model import BaseModel
-from models.networks.vqvae_networks.network import VQVAE
-from models.networks.diffusion_networks.network import DiffusionUNet
-from models.networks.resnet_v1 import resnet18
-from models.networks.bert_networks.network import BERTTextEncoder
-from models.model_utils import load_vqvae
+from SDFusion.models.base_model import BaseModel
+from SDFusion.models.networks.vqvae_networks.network import VQVAE
+from SDFusion.models.networks.diffusion_networks.network import DiffusionUNet
+from SDFusion.models.networks.resnet_v1 import resnet18
+from SDFusion.models.networks.bert_networks.network import BERTTextEncoder
+from SDFusion.models.model_utils import load_vqvae
 
 ## ldm util
-from models.networks.diffusion_networks.ldm_diffusion_util import (
+from SDFusion.models.networks.diffusion_networks.ldm_diffusion_util import (
     make_beta_schedule,
     extract_into_tensor,
     noise_like,
     exists,
     default,
 )
-from models.networks.diffusion_networks.samplers.ddim import DDIMSampler
+from SDFusion.models.networks.diffusion_networks.samplers.ddim import DDIMSampler
 
 # distributed 
-from utils.distributed import reduce_loss_dict
+from SDFusion.utils.distributed import reduce_loss_dict
 
 # rendering
-from utils.util_3d import init_mesh_renderer, render_sdf
+from SDFusion.utils.util_3d import init_mesh_renderer, render_sdf
 
 class SDFusionMultiModal2ShapeModel(BaseModel):
     def name(self):

@@ -162,4 +162,7 @@ cython_debug/
 .idea
 preparation
 outputs
-data/panoptic_front3d.pth
+data/panoptic_front3d_v2.pth
+data/front3d.zip
+data/front3d
+SDFusion/saved_ckpt

@@ -1,7 +1,7 @@
 from termcolor import colored
 import torch
 
-from models.networks.vqvae_networks.network import VQVAE
+from SDFusion.models.networks.vqvae_networks.network import VQVAE
 
 
 def load_vqvae(vq_conf, vq_ckpt, opt=None):

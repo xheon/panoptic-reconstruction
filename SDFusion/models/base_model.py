@@ -1,29 +1,29 @@
 import os
 from termcolor import colored, cprint
 import torch
-import utils.util as util
+import SDFusion.utils.util as util
 
 def create_model(opt):
     model = None
 
     if opt.model == 'vqvae':
-        from models.vqvae_model import VQVAEModel
+        from SDFusion.models.vqvae_model import VQVAEModel
         model = VQVAEModel()
     
     elif opt.model == 'sdfusion':
-        from models.sdfusion_model import SDFusionModel
+        from SDFusion.models.sdfusion_model import SDFusionModel
         model = SDFusionModel()
         
     elif opt.model == 'sdfusion-txt2shape':
-        from models.sdfusion_txt2shape_model import SDFusionText2ShapeModel
+        from SDFusion.models.sdfusion_txt2shape_model import SDFusionText2ShapeModel
         model = SDFusionText2ShapeModel()
 
     elif opt.model == 'sdfusion-img2shape':
-        from models.sdfusion_img2shape_model import SDFusionImage2ShapeModel
+        from SDFusion.models.sdfusion_img2shape_model import SDFusionImage2ShapeModel
         model = SDFusionImage2ShapeModel()
 
     elif opt.model == 'sdfusion-mm2shape':
-        from models.sdfusion_mm_model import SDFusionMultiModal2ShapeModel
+        from SDFusion.models.sdfusion_mm_model import SDFusionMultiModal2ShapeModel
         model = SDFusionMultiModal2ShapeModel()
         
     else:

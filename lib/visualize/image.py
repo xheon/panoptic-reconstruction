@@ -3,7 +3,7 @@ from typing import Union
 
 import numpy as np
 import torch
-from matplotlib import patches
+from matplotlib import patches, pyplot
 from matplotlib.figure import Figure
 from torchvision import transforms as T
 
@@ -18,7 +18,7 @@ NormalizeFunc = T.Normalize(mean=[-mean / std for mean, std in zip(__imagenet_st
 
 
 def write_detection_image(image: Union[np.array, torch.Tensor], detections: BoxList, output_file: os.PathLike) -> None:
-    bounding_box = detections.bbox
+    bounding_box = detections.get_field("boxes")
     label = detections.get_field("label")
     masks = detections.get_field("mask2d")
 
@@ -106,6 +106,20 @@ def write_rgb_image(image: Union[np.array, torch.Tensor], output_file: os.PathLi
 
     io.write_image(image, output_file)
 
+def get_masks(image: Union[np.array, torch.Tensor], detections: BoxList, output_file: os.PathLike) -> None:
+    masks = ~(detections['masks'][0].cpu().numpy().astype(np.bool))
+    num_instances = masks.shape[0]
+    image = image[0].permute(1,2,0).cpu().numpy()
+    pyplot.imsave(os.path.join(output_file, f"image.png"), (image*255).astype(np.uint8))
+    
+    new_images = []
+    for i in range(num_instances):
+        mask = masks[i]
+        new_image = apply_mask(image.copy(), mask, [0,0,0], 1)
+        pyplot.imsave(os.path.join(output_file, f"mask_{i}.png"), (new_image*255).astype(np.uint8))
+        new_images.append(torch.tensor(new_image).to(detections['masks'][0].device).permute(2,0,1).unsqueeze(0))
+        
+    return new_images
 
 def write_depth(depth_map: Union[DepthMap, np.array, torch.Tensor], output_file: os.PathLike) -> None:
     if isinstance(depth_map, DepthMap):

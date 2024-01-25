@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 from functools import partial
 
-from models.networks.diffusion_networks.ldm_diffusion_util import (
+from SDFusion.models.networks.diffusion_networks.ldm_diffusion_util import (
     make_ddim_sampling_parameters,
     make_ddim_timesteps,
     noise_like

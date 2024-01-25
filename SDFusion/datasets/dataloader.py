@@ -1,7 +1,7 @@
 import torch.utils.data
 
-from datasets.base_dataset import CreateDataset
-from datasets.base_dataset import data_sampler
+from SDFusion.datasets.base_dataset import CreateDataset
+from SDFusion.datasets.base_dataset import data_sampler
 
 def get_data_generator(loader):
     while True:

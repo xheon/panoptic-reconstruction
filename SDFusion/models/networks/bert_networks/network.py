@@ -4,7 +4,7 @@
 import torch
 import torch.nn as nn
 
-from models.networks.bert_networks.x_transformer import Encoder, TransformerWrapper
+from SDFusion.models.networks.bert_networks.x_transformer import Encoder, TransformerWrapper
 
 # from models.networks.transformer_networks.x_transformer import Encoder, TransformerWrapper
 

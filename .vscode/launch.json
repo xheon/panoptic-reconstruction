@@ -1,0 +1,50 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Joined Infer",
+            "type": "python",
+            "request": "launch",
+            "program": "tools/test_joined_single_image.py",
+            "cwd": "${workspaceFolder}",
+            "env": {"PYTHONPATH": "${workspaceFolder}${pathSeparator}${env:PYTHONPATH}"},
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "-i", "data/front3d/0a9c667d-033d-448c-b17c-dc55e6d3c386/rgb_0019.png",
+                "-o", "outputs/joined/"
+            ]
+        },
+        {
+            "name": "Panoptic Infer",
+            "type": "python",
+            "request": "launch",
+            "program": "tools/test_net_single_image.py",
+            "cwd": "${workspaceFolder}",
+            "env": {"PYTHONPATH": "${workspaceFolder}${pathSeparator}${env:PYTHONPATH}"},
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "-i", "data/front3d/0a9c667d-033d-448c-b17c-dc55e6d3c386/rgb_0019.png",
+                "-o", "outputs/front3d_samples"
+            ]
+        },
+        {
+            "name": "Train",
+            "type": "python",
+            "request": "launch",
+            "program": "tools/train_panoptic_sdfusion.py",
+            "cwd": "${workspaceFolder}",
+            "env": {"PYTHONPATH": "${workspaceFolder}${pathSeparator}${env:PYTHONPATH}"},
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--config-file", "configs/front3d_train_joined.yaml",
+                "--output-path", "outputs/train_joined"
+            ]
+        },
+    ]
+}
