@@ -17,15 +17,23 @@ from lib.structures import DepthMap
 
 import lib.visualize as vis
 from lib.visualize.utils import get_class_labels
-from lib.visualize.image import write_detection_image, write_depth, get_masks
+from lib.visualize.image import write_detection_image, write_depth, get_image_for_instance
 from lib.structures.frustum import compute_camera2frustum_transform
 
 import trimesh
 from skimage import measure 
 from pysdf import SDF
-
+import kaolin as kal
 
 def main(opts):
+    output_path = Path(opts.output)
+    output_path.mkdir(exist_ok=True, parents=True)
+    
+    instance_ids, instance_sdfs, cropped_instance_images, cropped_instance_masks, instance_texts = run_panoptic(opts, output_path)
+    
+    run_sdfusion([{'id': id, 'sdf': sdf, 'img': img, 'mask':mask, 'text': text} for id, sdf, img, mask, text in zip(instance_ids, instance_sdfs, cropped_instance_images, cropped_instance_masks, instance_texts)], output_path)
+
+def run_panoptic(opts, output_path):
     configure_inference(opts)
 
     device = torch.device("cuda:0")
@@ -48,13 +56,18 @@ def main(opts):
     image_transforms = t2d.Compose([
         t2d.Resize(color_image_size),
         t2d.ToTensor(),
+    ])
+    
+    image_transforms_normalize = t2d.Compose([
         t2d.Normalize(imagenet_stats[0], imagenet_stats[1]),  # use imagenet stats to normalize image
     ])
 
+
     # Open and prepare input image.
     print("Load input image...")
-    input_image = Image.open(opts.input)
-    input_image = image_transforms(input_image)
+    sdfusion_input_image = image_transforms(Image.open(opts.input).convert('RGB'))
+    input_image = image_transforms(Image.open(opts.input))
+    input_image = image_transforms_normalize(input_image)
     input_image = input_image.unsqueeze(0).to(device)
 
     # Prepare intrinsic matrix.
@@ -70,18 +83,20 @@ def main(opts):
     with torch.no_grad():
         results = model.inference(input_image, front3d_intrinsic, front3d_frustum_mask)
         
-        occupancy_instances = extract_instance_occupancies(results)
-        instance_sdfs, instance_ids = occupancies_to_sdfs(occupancy_instances)
+        occupancy_instances = extract_instance_occupancies(results, output_path)
+        instance_sdfs, instance_ids = occupancies_to_sdfs(occupancy_instances, output_path)
         
-        instance_images = get_masks(results["input"], results["instance"], config.OUTPUT_DIR)
+        cropped_instance_images, cropped_instance_masks = get_image_for_instance(sdfusion_input_image, results["instance"], output_path)
         instance_texts = instance_ids_to_labels(instance_ids, results)
         
-        run_sdfusion([{'id': id, 'sdf': sdf, 'img': img, 'text': text} for id, sdf, img, text in zip(instance_ids, instance_sdfs, instance_images, instance_texts)])
-
-    print(f"Visualize results, save them at {config.OUTPUT_DIR}")
-    visualize_results(results, config.OUTPUT_DIR)
-
-
+    print(f"Visualize results, save them at {output_path}")
+    visualize_results(results, output_path)
+    
+    with open(output_path / "semantic_labels.json", "w") as file:
+        json.dump(dict(zip(instance_ids, instance_texts)), file, indent=4)
+    
+    return instance_ids, instance_sdfs, cropped_instance_images, cropped_instance_masks, instance_texts
+    
 def configure_inference(opts):
     # load config
     config.OUTPUT_DIR = opts.output
@@ -96,8 +111,6 @@ def configure_inference(opts):
 
 def visualize_results(results: Dict[str, Any], output_path: os.PathLike) -> None:
     device = results["input"].device
-    output_path = Path(output_path)
-    output_path.mkdir(exist_ok=True, parents=True)
 
     # Visualize depth prediction
     depth_map: DepthMap = results["depth"]
@@ -151,7 +164,7 @@ def visualize_results(results: Dict[str, Any], output_path: os.PathLike) -> None
     vis.write_semantic_pointcloud(points, point_semantics, output_path / "points_surface_semantics.ply")
     vis.write_semantic_pointcloud(points, point_instances, output_path / "points_surface_instances.ply")
 
-def extract_instance_occupancies(results):
+def extract_instance_occupancies(results, output_path):
     instances = []
     # MinkowskiSparseTensor to dense tensor
     occupancy = results['frustum']['geometry'].dense(shape=torch.Size([1,1,256,256,256]))[0].squeeze(0).squeeze(0)
@@ -171,11 +184,11 @@ def extract_instance_occupancies(results):
         
         instances.append((instance, instance_label))
         
-    debug_export(instances, occupancy)
+    debug_export(occupancy, output_path)
     
     return instances
 
-def occupancies_to_sdfs(occupancy_instances):
+def occupancies_to_sdfs(occupancy_instances, output_path):
     """
     need to convert to numpy -> no end-to-end gradient
     """
@@ -186,7 +199,14 @@ def occupancies_to_sdfs(occupancy_instances):
             vertices, faces, _, _ = measure.marching_cubes(occupancy_grid.clone().detach().cpu().numpy(), level=0)
             
             mesh = trimesh.Trimesh(vertices,faces)
+            mesh.apply_transform([  
+                [ 1.0,   0.0,  0.0,  0.0],
+                [ 0.0,  -1.0,  0.0,  0.0],
+                [ 0.0,   0.0, -1.0,  0.0],
+                [ 0.0,   0.0,  0.0,  1.0]
+            ])
             box = mesh.bounding_box_oriented.bounds
+            mesh.export(output_path / f"mesh_panoptic_{instance_id}.obj")
             
             diff = box[1] - box[0]
             diff = np.max(diff)
@@ -198,53 +218,51 @@ def occupancies_to_sdfs(occupancy_instances):
             
             sdf = SDF(vertices, faces)
             
-            resulting_volume = generate_volume(x_range, y_range, z_range)
+            resolution = 512
+            resulting_volume = generate_volume(x_range, y_range, z_range, resolution)
             sdf_sampled = sdf(resulting_volume.reshape(-1,3))
-            sdf_sampled = sdf_sampled.reshape(256, 256, 256)
+            sdf_sampled = sdf_sampled.reshape(resolution, resolution, resolution)
+            
+            vertices, faces, _, _ = measure.marching_cubes(sdf_sampled, level=0)
+            sdf_mesh = trimesh.Trimesh(vertices, faces)
+            sdf_mesh.export(output_path / f"mesh_sdf_{instance_id}.obj")
             
             sdfs.append(torch.Tensor(sdf_sampled).to(occupancy_grid.device)[None, None, ...])
             instance_ids.append(instance_id)
         except Exception as e:
-            print(f"skipping instance {instance_id}")
+            print(f"skipping instance {instance_id} {e}")
             
     return sdfs, instance_ids
 
 def instance_ids_to_labels(instance_ids, results):
-    return ['chair', 'table', 'cabinet']
-    #TODO: Maybe use ground truth labels and instances and only use predicted occupancy grid
-    # Could lead to better training
     id_to_class_mapping = results['panoptic']['panoptic_semantic_mapping']
-    # TODO: get real class labels
     class_to_label_mapping = get_class_labels()
-    
     return [class_to_label_mapping[id_to_class_mapping[instance_id]] for instance_id in instance_ids]
     
     
 
-def debug_export(instances, occupancy):
-    for instance, instance_id in instances:
-        try:
-            vertices, faces, _, _ = measure.marching_cubes(instance.clone().detach().cpu().numpy(), level=0)
-            mesh = trimesh.Trimesh(vertices,faces)
-            mesh.export(f"outputs/joined_infer_test/mesh_panoptic_{instance_id}.obj")
-        except Exception as e:
-            print(f"skipping export of panoptic mesh {instance_id} {e}")
-        
-        try:
-            vertices, faces, _, _ = measure.marching_cubes(occupancy.clone().detach().cpu().numpy(), level=0)
-            mesh = trimesh.Trimesh(vertices,faces)
-            mesh.export(f"outputs/joined_infer_test/occupancy_panoptic.obj")
-        except Exception as e:
-            print(f"skipping export of panoptic occupancy grid {e}")
+def debug_export(occupancy, output_path):
+    try:
+        vertices, faces, _, _ = measure.marching_cubes(occupancy.clone().detach().cpu().numpy(), level=0)
+        mesh.apply_transform([  
+                [ 1.0,   0.0,  0.0,  0.0],
+                [ 0.0,  -1.0,  0.0,  0.0],
+                [ 0.0,   0.0, -1.0,  0.0],
+                [ 0.0,   0.0,  0.0,  1.0]
+            ])
+        mesh = trimesh.Trimesh(vertices,faces)
+        mesh.export(output_path / f"occupancy_panoptic.obj")
+    except Exception as e:
+        print(f"skipping export of panoptic occupancy grid {e}")
 
-def generate_volume(x_range, y_range, z_range):
+def generate_volume(x_range, y_range, z_range, resolution):
     """
     Generate Coordinate Volume with given coordinate ranges
     """
     # Generate 1D arrays for x, y, and z coordinates
-    x_coords = np.linspace(x_range[0], x_range[1], 256)
-    y_coords = np.linspace(y_range[0], y_range[1], 256)
-    z_coords = np.linspace(z_range[0], z_range[1], 256)
+    x_coords = np.linspace(x_range[0], x_range[1], resolution)
+    y_coords = np.linspace(y_range[0], y_range[1], resolution)
+    z_coords = np.linspace(z_range[0], z_range[1], resolution)
 
     # Create a 3D grid of coordinates using NumPy's meshgrid
     x, y, z = np.meshgrid(x_coords, y_coords, z_coords, indexing='ij')
@@ -254,23 +272,26 @@ def generate_volume(x_range, y_range, z_range):
 
     return volume
 
-def get_image():
-    # get image TODO: Get actual Image of bed with semantic mask
-    img_np = np.array(Image.open(input_img).convert('RGB'))
-    print(img_np.shape)
-    input_mask = np.ones((img_np.shape[0], img_np.shape[1]))#"demo_data/revolving-chair-mask.png"
-    print(input_mask.shape)
+def sdfusion_clean_image(input_image, input_mask):
+    from SDFusion.utils.demo_util import preprocess_image
+    import torchvision.transforms as transforms
 
-    img_for_vis, img_clean = preprocess_image(input_img, input_mask)
+    input_image = input_image.permute(1,2,0).cpu().numpy()
+    #input_mask = input_mask.cpu().numpy()
+    input_mask = np.ones(input_image.shape[0:2])
+
+    #img_for_vis, img_clean = preprocess_image(input_image, input_mask)
     mean, std = [0.5, 0.5, 0.5], [0.5, 0.5, 0.5]
     transforms = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize(mean, std),
-        transforms.Resize((256, 256)),
+        #transforms.Normalize(mean, std),
+        #transforms.Resize((256, 256)),
     ])
-    img_clean = transforms(img_clean).unsqueeze(0)
+    img_clean = transforms(input_image).unsqueeze(0)
+    
+    return img_clean
 
-def run_sdfusion(instances):
+def run_sdfusion(instances, output_path):
     # first set up which gpu to use
     import os
     gpu_ids = 0
@@ -311,20 +332,23 @@ def run_sdfusion(instances):
     out_dir = 'outputs/panoptic_sdfuion'
     if not os.path.exists(out_dir): os.makedirs(out_dir)
 
-    ddim_steps = 100
+    ddim_steps = 50
     ddim_eta = 0.1
     uc_scale = 5.
+    mask_mode = 'bottom'
     
     output_instances = [] # (instance_id, occupancy_grid)
     for instance in instances:
         txt_img_scales = [(1., 1.)] # [(0., 0.), (1., 0.), (0., 1.), (1., 1.)]
         for txt_scale, img_scale in txt_img_scales:
-            SDFusion.inference(instance, ddim_steps=ddim_steps, ddim_eta=ddim_eta, uc_scale=uc_scale)
+            instance['img'] = sdfusion_clean_image(instance['img'], instance['mask'])
+            #SDFusion.inference(instance, ddim_steps=ddim_steps, ddim_eta=ddim_eta, uc_scale=uc_scale)
+            SDFusion.mm_inference(instance, mask_mode=mask_mode, ddim_steps=ddim_steps, ddim_eta=ddim_eta, uc_scale=uc_scale, txt_scale=txt_scale, img_scale=img_scale)
             # save the generation results
             sdf_gen = SDFusion.gen_df
             mesh_gen = sdf_to_mesh(sdf_gen)
             mesh_trim = trimesh.Trimesh(mesh_gen.verts_list()[0].detach().cpu().numpy(),mesh_gen.faces_list()[0].detach().cpu().numpy())
-            mesh_trim.export(f"outputs/joined_infer_test/mesh_sdfusion_{instance['id']}_{instance['text']}.obj")
+            mesh_trim.export(output_path / f"mesh_sdfusion_{instance['id']}.obj")
             
             
 if __name__ == '__main__':

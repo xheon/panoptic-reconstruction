@@ -6,6 +6,7 @@ import torch
 from matplotlib import patches, pyplot
 from matplotlib.figure import Figure
 from torchvision import transforms as T
+import torchvision
 
 from lib.structures import BoxList, DepthMap
 
@@ -106,20 +107,29 @@ def write_rgb_image(image: Union[np.array, torch.Tensor], output_file: os.PathLi
 
     io.write_image(image, output_file)
 
-def get_masks(image: Union[np.array, torch.Tensor], detections: BoxList, output_file: os.PathLike) -> None:
-    masks = ~(detections['masks'][0].cpu().numpy().astype(np.bool))
+def get_image_for_instance(image: Union[np.array, torch.Tensor], detections: BoxList, output_file: os.PathLike) -> None:
+    pyplot.imsave(os.path.join(output_file, f"image.png"), (image.permute(1,2,0).cpu().numpy()*255).astype(np.uint8))
+    
+    masks = detections['masks'][0]
     num_instances = masks.shape[0]
-    image = image[0].permute(1,2,0).cpu().numpy()
-    pyplot.imsave(os.path.join(output_file, f"image.png"), (image*255).astype(np.uint8))
+    boxes = torchvision.ops.masks_to_boxes(masks)
     
     new_images = []
+    new_masks = []
     for i in range(num_instances):
         mask = masks[i]
-        new_image = apply_mask(image.copy(), mask, [0,0,0], 1)
-        pyplot.imsave(os.path.join(output_file, f"mask_{i}.png"), (new_image*255).astype(np.uint8))
-        new_images.append(torch.tensor(new_image).to(detections['masks'][0].device).permute(2,0,1).unsqueeze(0))
+        x1, y1, x2, y2 = boxes[i].int().tolist()
         
-    return new_images
+        #x1, y1 = max(0, x1-5), max(0, y1-5)
+        #x2, y2 = x2+5, y2+5
+        
+        new_image = image[:, y1:y2, x1:x2]
+        new_mask = mask[y1:y2, x1:x2]
+        pyplot.imsave(os.path.join(output_file, f"mask_{i}.png"), (new_image.permute(1,2,0).cpu().numpy()*255).astype(np.uint8))
+        new_images.append(new_image)
+        new_masks.append(new_mask)
+        
+    return new_images, new_masks
 
 def write_depth(depth_map: Union[DepthMap, np.array, torch.Tensor], output_file: os.PathLike) -> None:
     if isinstance(depth_map, DepthMap):

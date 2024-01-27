@@ -484,7 +484,7 @@ class SDFusionMultiModal2ShapeModel(BaseModel):
         z = self.vqvae(self.x, forward_no_quant=True, encode_only=True)
 
         # get mask
-        from utils.demo_util import get_shape_mask
+        from SDFusion.utils.demo_util import get_shape_mask
         x_mask, z_mask = get_shape_mask(mask_mode)
 
         # for vis purpose
