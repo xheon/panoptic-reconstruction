@@ -408,10 +408,10 @@ def get_shape_mask(mask_mode, device='cuda'):
         x_mask[:, :, :, :, :D//2] = False
         z_mask[:, :, :, :, :d//2] = 0
         
-    elif mask_mode == 'all':
+    elif isinstance(mask_mode, float) or isinstance(mask_mode, int):
         # given front-half
         x_mask[:, :, :, :, :] = False
-        z_mask[:, :, :, :, :] = 0
+        z_mask[:, :, :, :, :] = mask_mode
 
     return x_mask, z_mask
     

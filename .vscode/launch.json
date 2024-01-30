@@ -14,8 +14,8 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "args": [
-                "-i", "data/front3d/1a72d0f9-8ea7-45b9-8e82-998f04f062a4/rgb_0021.png",
-                "-o", "outputs/joined_infer/1a72d0f9-8ea7-45b9-8e82-998f04f062a4/rgb_0021"
+                "-i", "data/front3d/3f48e194-1e88-4dc1-b1d2-03114248c15f/rgb_0008.png",
+                "-o", "outputs/joined_infer/3f48e194-1e88-4dc1-b1d2-03114248c15f/rgb_0008"
             ]
         },
         {

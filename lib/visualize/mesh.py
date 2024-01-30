@@ -8,11 +8,12 @@ import marching_cubes as mc
 
 from lib.utils.transform import coords_multiplication
 from . import io, utils
+import trimesh
 
 
 def write_distance_field(distance_field: Union[np.array, torch.Tensor], labels: Optional[Union[np.array, torch.Tensor]],
                          output_file: os.PathLike, iso_value: float = 1.0, truncation: float = 3.0,
-                         color_palette=None, transform=None) -> None:
+                         color_palette=None, transform=None, return_mesh=False) -> None:
     if isinstance(distance_field, torch.Tensor):
         distance_field = distance_field.detach().cpu().numpy()
 
@@ -32,7 +33,10 @@ def write_distance_field(distance_field: Union[np.array, torch.Tensor], labels: 
 
         vertices = coords_multiplication(transform, vertices)
 
-    io.write_ply(vertices, colors, triangles, output_file)
+    if return_mesh:
+        return trimesh.Trimesh(vertices=vertices, faces=triangles, colors=colors)
+    else:
+        io.write_ply(vertices, colors, triangles, output_file)
 
 
 def get_mesh(distance_field: np.array, iso_value: float = 1.0, truncation: float = 3.0) -> Tuple[np.array, np.array]:
