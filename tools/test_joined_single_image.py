@@ -354,14 +354,15 @@ def run_sdfusion(instances, output_path):
     ddim_steps = 50
     ddim_eta = 0.1
     uc_scale = 5.
-    mask_mode = 0.0
+    mask_mode = 0.2
     
     output_instances = [] # (instance_id, occupancy_grid)
     sdfusion_meshes = {}
     for instance in instances:
-        txt_img_scales = [(1., 1.0)] # [(0., 0.), (1., 0.), (0., 1.), (1., 1.)]
+        txt_img_scales = [(1., 1.)] # [(0., 0.), (1., 0.), (0., 1.), (1., 1.)]
         for txt_scale, img_scale in txt_img_scales:
             instance['sdf'] = instance['sdf'].to(SDFusion.device)
+            instance['sdf'] *= -1 # TODO: Is inverting correct?
             
             # Render SDF for debug output
             rend_sdf = render_sdf(SDFusion.renderer, (instance['sdf']).to(device))
