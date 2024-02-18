@@ -14,8 +14,51 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "args": [
-                "-i", "data/front3d/1a72d0f9-8ea7-45b9-8e82-998f04f062a4/rgb_0021.png",
-                "-o", "outputs/joined_infer/1a72d0f9-8ea7-45b9-8e82-998f04f062a4/rgb_0021"
+                // Image to use
+                "-io", 
+                "036bc96c-419d-4a43-812e-1e533d95dfd3/0014",      
+                "5d71dabb-9464-4e0c-8d98-e829ade827af/rgb_0034",    
+                // "378deb84-a0d6-4aab-93f5-ea9d4223b030/rgb_0002",    
+                // "62186c4a-b522-4729-99bd-0c88e54dbf83/rgb_0029",    
+                // "b01b75da-3dad-4961-863a-3834d6479711/rgb_0042",   
+                // "f95acb63-fe70-447f-a493-75b0c6174f59/rgb_0060",    
+                // "af3a0928-2e39-4864-9f53-d17205cba116/rgb_0059",    
+                // "e16c4c32-c989-4e79-bb03-627edc763e44/rgb_0047",    
+                // "c7818ac9-9bfe-40c5-932a-32d4c83ceab0/rgb_0001",    
+                // "8422cae1-c835-4703-aa9d-b15c8824bbc3/rgb_0011",    
+                
+                // "7cb44194-7156-4c8f-94dc-3c0322833ef1/rgb_0010",    
+                // "dc967ffc-d83c-4b5d-aaf9-1d86a133928f/rgb_0013",     
+                // "b7516366-5a72-4206-afa3-98e1f87ae3d1/rgb_0024",    
+                // "b7516366-5a72-4206-afa3-98e1f87ae3d1/rgb_0012",     
+                // "e836a041-71fd-4fd4-9aa5-84cbc37b69dd/rgb_0004",       
+                
+                // "a8c505d9-160b-4a66-9358-5c0bb4d90562/rgb_0051",  
+                // "7f1c14eb-0479-4bd8-a52d-7952ad51a1f0/rgb_0049",
+                // "5e9d0b19-17ef-47e5-8d53-eb0bba6d62b6/rgb_0016",
+
+                // "d4d0237f-a66b-40cf-bf85-56e11cb20602/rgb_0005",
+                // "d4d0237f-a66b-40cf-bf85-56e11cb20602/rgb_0112",
+                // "d4d0237f-a66b-40cf-bf85-56e11cb20602/rgb_0058",
+                // "d4d0237f-a66b-40cf-bf85-56e11cb20602/rgb_0203",
+                // "d4d0237f-a66b-40cf-bf85-56e11cb20602/rgb_0245",
+                // "d8442781-1fb7-4d74-a3ef-c7bea7299bb3/rgb_0019",
+                // "d8442781-1fb7-4d74-a3ef-c7bea7299bb3/rgb_0008",
+                // "d8442781-1fb7-4d74-a3ef-c7bea7299bb3/rgb_0000",
+                // "f1c69ce3-d538-41a1-8542-fb78f90316c1/rgb_0017",
+                // "f1c69ce3-d538-41a1-8542-fb78f90316c1/rgb_0019",
+                // "4c2c82a1-1589-4326-be92-03187ba0b459/rgb_0010",
+                // "4c2c82a1-1589-4326-be92-03187ba0b459/rgb_0017",
+                // "4c2c82a1-1589-4326-be92-03187ba0b459/rgb_0014",
+                // "e82a25d9-aac5-489a-b6c3-8830dda1d0e8/rgb_0016",
+                // "e82a25d9-aac5-489a-b6c3-8830dda1d0e8/rgb_0013",
+                // "e82a25d9-aac5-489a-b6c3-8830dda1d0e8/rgb_0009",
+                // "53cf7da8-7c02-419d-bc4a-acf5d4337cac/rgb_0014",
+                // SDF Model to use
+                "-sf",
+                //"sdfusion-mm2shape",
+                // "df_steps-6000",
+                "df_steps-12000"
             ]
         },
         {

@@ -107,10 +107,12 @@ def write_rgb_image(image: Union[np.array, torch.Tensor], output_file: os.PathLi
 
     io.write_image(image, output_file)
 
-def get_image_for_instance(image: Union[np.array, torch.Tensor], detections: BoxList, output_file: os.PathLike) -> None:
+def get_image_for_instance(image: Union[np.array, torch.Tensor], detections: BoxList, instance_ids, output_file: os.PathLike) -> None:
     pyplot.imsave(os.path.join(output_file, f"image.png"), (image.permute(1,2,0).cpu().numpy()*255).astype(np.uint8))
     
     masks = detections['masks'][0]
+    if len(masks.shape) == 2:
+        masks = masks.unsqueeze(0)
     num_instances = masks.shape[0]
     boxes = torchvision.ops.masks_to_boxes(masks)
     
@@ -125,7 +127,7 @@ def get_image_for_instance(image: Union[np.array, torch.Tensor], detections: Box
         
         new_image = image[:, y1:y2, x1:x2]
         new_mask = mask[y1:y2, x1:x2]
-        pyplot.imsave(os.path.join(output_file, f"mask_{i}.png"), (new_image.permute(1,2,0).cpu().numpy()*255).astype(np.uint8))
+        pyplot.imsave(os.path.join(output_file, f"mask_{instance_ids[i]}.png"), (new_image.permute(1,2,0).cpu().numpy()*255).astype(np.uint8))
         new_images.append(new_image)
         new_masks.append(new_mask)
         

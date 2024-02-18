@@ -54,7 +54,7 @@ def create_color_palette():
     
 def get_class_labels():
     return [
-       '', 'cabinet', 'bed', 'wide sofa', 'a long sofa', 'table', 'desk', 'dresser', 'lamp', 'other', 'wall', 'floor', 'ceiling'
+       '', 'cabinet', 'bed', 'chair', 'sofa', 'table', 'desk', 'dresser', 'lamp', 'other', 'wall', 'floor', 'ceiling'
     ]
 
 

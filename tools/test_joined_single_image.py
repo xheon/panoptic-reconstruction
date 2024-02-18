@@ -26,6 +26,11 @@ from skimage import measure
 from pysdf import SDF
 #import kaolin as kal
 import mesh2sdf 
+import open3d
+import copy
+import math
+
+from pytorch3d.loss import chamfer_distance
 
 def main(opts):
     output_path = Path(opts.output)
@@ -33,7 +38,7 @@ def main(opts):
     
     instance_ids, instance_sdfs, cropped_instance_images, cropped_instance_masks, instance_texts = run_panoptic(opts, output_path)
     
-    sdfusion_meshes = run_sdfusion([{'id': id, 'sdf': sdf, 'img': img, 'mask':mask, 'text': text} for id, sdf, img, mask, text in zip(instance_ids, instance_sdfs, cropped_instance_images, cropped_instance_masks, instance_texts)], output_path)
+    sdfusion_meshes = run_sdfusion([{'id': id, 'sdf': sdf, 'img': img, 'mask':mask, 'text': text} for id, sdf, img, mask, text in zip(instance_ids, instance_sdfs, cropped_instance_images, cropped_instance_masks, instance_texts)], opts, output_path)
 
     combine_panoptic_sdfusion(instance_ids, sdfusion_meshes, output_path)
 
@@ -93,7 +98,7 @@ def run_panoptic(opts, output_path):
         instance_mesh, mesh_instance_ids = extract_instance_mesh(results, output_path)
         instance_sdfs, instance_ids = instance_mesh_to_sdf(instance_mesh, mesh_instance_ids, output_path)
         
-        cropped_instance_images, cropped_instance_masks = get_image_for_instance(sdfusion_input_image, results["instance"], output_path)
+        cropped_instance_images, cropped_instance_masks = get_image_for_instance(sdfusion_input_image, results["instance"], instance_ids, output_path) #TODO connect with instance id
         instance_texts = instance_ids_to_labels(instance_ids, results)
         
     
@@ -199,12 +204,14 @@ def instance_mesh_to_sdf(instance_mesh, instance_ids, output_path):
     colors = create_color_palette()
     for instance_id in instance_ids:
         if instance_id in [0, 1, 2]:
-            # empty wall or floor
+            # empty, wall or floor
             continue
         try:
-            face_mask = (instance_mesh.visual.face_colors == list(colors[instance_id]) + [255]).all(axis=1)
+            face_color = list(colors[instance_id]) + [255]
+            face_mask = (instance_mesh.visual.face_colors == face_color).all(axis=1)
             single_instance_mesh = instance_mesh.copy()
             single_instance_mesh.update_faces(face_mask)
+            single_instance_mesh.remove_unreferenced_vertices()
             
             max_val = np.absolute(single_instance_mesh.vertices).max()
             single_instance_mesh.vertices /= max_val
@@ -216,18 +223,6 @@ def instance_mesh_to_sdf(instance_mesh, instance_ids, output_path):
             diff = box[1] - box[0]
             diff = np.max(diff)
             center = (box[1] + box[0])/2
-            
-            # sdf = mesh2sdf.compute(
-            #     single_instance_mesh.vertices, single_instance_mesh.faces, 64, 
-            #     fix=True, level=1.0, return_mesh=False
-            # )
-            
-            # vertices, faces, _, _ = measure.marching_cubes(sdf, level=1)
-            # sdf_mesh = trimesh.Trimesh(vertices, faces)
-            # sdf_mesh.export(output_path / f"mesh_sdf_{instance_id}.obj")
-            
-            # sdfs.append(torch.Tensor(sdf)[None, None, ...])
-            # instance_ids_for_sdf.append(instance_id)
             
             # Other SDF method
             sdf = SDF(single_instance_mesh.vertices, single_instance_mesh.faces)
@@ -244,6 +239,7 @@ def instance_mesh_to_sdf(instance_mesh, instance_ids, output_path):
             
             vertices, faces, _, _ = measure.marching_cubes(sdf_sampled, level=0)
             sdf_mesh = trimesh.Trimesh(vertices, faces)
+            sdf_mesh.visual.face_colors = face_color
             sdf_mesh.export(output_path / f"mesh_sdf_{instance_id}.obj")
             
             sdf_sampled /= sdf_sampled.max()/3
@@ -311,7 +307,7 @@ def sdfusion_clean_image(input_image, input_mask):
     
     return img_clean
 
-def run_sdfusion(instances, output_path):
+def run_sdfusion(instances, opts, output_path):
     # first set up which gpu to use
     import os
     gpu_ids = 0
@@ -339,7 +335,8 @@ def run_sdfusion(instances, output_path):
     device = opt.device
     
     # initialize SDFusion model
-    ckpt_path = 'SDFusion/saved_ckpt/sdfusion-mm2shape.pth'
+    ckpt_path = f'SDFusion/saved_ckpt/{opts.sdfusion}.pth'
+    #ckpt_path = 'SDFusion/saved_ckpt/df_steps_3000.pth'
     opt.init_model_args(ckpt_path=ckpt_path)
 
     SDFusion = create_model(opt)
@@ -356,29 +353,28 @@ def run_sdfusion(instances, output_path):
     uc_scale = 5.
     mask_mode = 0.2
     
-    output_instances = [] # (instance_id, occupancy_grid)
     sdfusion_meshes = {}
-    for instance in instances:
-        txt_img_scales = [(1., 1.)] # [(0., 0.), (1., 0.), (0., 1.), (1., 1.)]
-        for txt_scale, img_scale in txt_img_scales:
-            instance['sdf'] = instance['sdf'].to(SDFusion.device)
-            instance['sdf'] *= -1 # TODO: Is inverting correct?
-            
-            # Render SDF for debug output
-            rend_sdf = render_sdf(SDFusion.renderer, (instance['sdf']).to(device))
-            tensor_to_pil(rend_sdf).save(output_path / f"mesh_sdf_input_{instance['id']}.png")
-            
-            # SDFusion
-            instance['img'] = sdfusion_clean_image(instance['img'], instance['mask'])
-            #SDFusion.inference(instance, ddim_steps=ddim_steps, ddim_eta=ddim_eta, uc_scale=uc_scale)
-            SDFusion.mm_inference(instance, mask_mode=mask_mode, ddim_steps=ddim_steps, ddim_eta=ddim_eta, uc_scale=uc_scale, txt_scale=txt_scale, img_scale=img_scale)
-            # save the generation results
-            sdf_gen = SDFusion.gen_df
-            mesh_gen = sdf_to_mesh(sdf_gen)
-            mesh_trim = trimesh.Trimesh(mesh_gen.verts_list()[0].detach().cpu().numpy(),mesh_gen.faces_list()[0].detach().cpu().numpy())
-            trimesh.repair.fix_inversion(mesh_trim)
-            mesh_trim.export(output_path / f"mesh_sdfusion_{instance['id']}.obj")
-            sdfusion_meshes[instance['id']] = mesh_trim
+    with torch.no_grad():
+        for instance in instances:
+            txt_img_scales = [(1.0, 0.4)] # [(0., 0.), (1., 0.), (0., 1.), (1., 1.)]
+            for txt_scale, img_scale in txt_img_scales:
+                instance['sdf'] = instance['sdf'].to(SDFusion.device)
+                instance['sdf'] *= -1 # SDFusion wants inverted SDF
+                
+                # Render SDF for debug output
+                rend_sdf = render_sdf(SDFusion.renderer, (instance['sdf']).to(device))
+                tensor_to_pil(rend_sdf).save(output_path / f"mesh_sdf_input_{instance['id']}.png")
+                
+                # SDFusion
+                instance['img'] = sdfusion_clean_image(instance['img'], instance['mask'])
+                #SDFusion.inference(instance, ddim_steps=ddim_steps, ddim_eta=ddim_eta, uc_scale=uc_scale)
+                SDFusion.mm_inference(instance, mask_mode=mask_mode, ddim_steps=ddim_steps, ddim_eta=ddim_eta, uc_scale=uc_scale, txt_scale=txt_scale, img_scale=img_scale)
+                # save the generation results
+                sdf_gen = SDFusion.gen_df
+                mesh_gen = sdf_to_mesh(sdf_gen)
+                mesh_trim = trimesh.Trimesh(mesh_gen.verts_list()[0].detach().cpu().numpy(),mesh_gen.faces_list()[0].detach().cpu().numpy())
+                trimesh.repair.fix_inversion(mesh_trim)
+                sdfusion_meshes[instance['id']] = mesh_trim
         
     return sdfusion_meshes
             
@@ -392,67 +388,196 @@ def combine_panoptic_sdfusion(instance_ids, sdfusion_meshes, output_path):
         [ 0.0,   0.0,  0.0,  1.0]
     ])
     trimesh.repair.fix_inversion(panoptic_mesh)
+    panoptic_mesh.apply_transform(align_mesh_with_floor_axis(panoptic_mesh, output_path))
     
     colors = create_color_palette()
     
     for instance_id in instance_ids:
         instance_color = list(colors[instance_id]) + [255]
         instance_sdfusion_mesh = sdfusion_meshes[instance_id]
+        instance_sdfusion_mesh.visual.face_colors = instance_color
+        instance_sdfusion_mesh.export(output_path / f"mesh_sdfusion_{instance_id}.obj")
         
         # Get panoptic instance mesh
         face_mask = (panoptic_mesh.visual.face_colors == instance_color).all(axis=1)
         instance_panoptic_mesh = panoptic_mesh.copy()
         instance_panoptic_mesh.update_faces(face_mask)
         instance_panoptic_mesh.remove_unreferenced_vertices()
-        #panoptic_box = trimesh.bounds.oriented_bounds(instance_panoptic_mesh)
-        #panoptic_box = instance_panoptic_mesh.copy().apply_transform(trimesh.bounds.minimum_cylinder(instance_panoptic_mesh)['transform']).bounding_box.bounds # Orientation
-        panoptic_box = instance_panoptic_mesh.bounding_box_oriented
+        # get the largest component
+        instance_panoptic_mesh.export(output_path / f'mesh_panoptic_replacement_{instance_id}.obj')
         
-        # Transform SDFusion to same dimensions
-        sdfusion_box = instance_sdfusion_mesh.bounding_box_oriented
-        #instance_sdfusion_mesh.vertices *= panoptic_diff/sdfusion_diff
-        instance_sdfusion_mesh.vertices *= panoptic_box.primitive.extents/sdfusion_box.primitive.extents
-        sdfusion_box = instance_sdfusion_mesh.bounding_box_oriented
+        # align sdfusion object with panoptic position
+        translation_to_source = instance_panoptic_mesh.centroid - instance_sdfusion_mesh.centroid
+        instance_sdfusion_mesh.vertices += translation_to_source
         
-        # For orientation
-        box_mask = np.ones(sdfusion_box.faces.shape[0], dtype=bool)
-        box_mask[-1] = False
-        panoptic_box_mesh = trimesh.Trimesh(panoptic_box.vertices, panoptic_box.faces)
-        sdfusion_box_mesh = trimesh.Trimesh(sdfusion_box.vertices, sdfusion_box.faces)
-        #panoptic_box_mesh.update_faces(box_mask)
-        #sdfusion_box_mesh.update_faces(box_mask)
+        # align rotation and scaling
+        instance_sdfusion_mesh = align_object_rotation_and_scaling(instance_sdfusion_mesh, instance_panoptic_mesh)
         
-        # Debug export
-        trimesh.util.concatenate(panoptic_mesh, panoptic_box_mesh).export(output_path / f'mesh_panoptic_bbox_{instance_id}.ply')
-        trimesh.util.concatenate(panoptic_box_mesh, sdfusion_box_mesh).export(output_path / f'mesh_panoptic_sdfusion_bbox_{instance_id}.ply')
-        
-        #mesh_transform, _, _ = trimesh.registration.icp(sdfusion_box.sample_grid(50), panoptic_box.sample_grid(50))
-        
-        # Register SDFusion
-        mesh_transform, _, _ = trimesh.registration.icp(sdfusion_box.vertices, panoptic_box.vertices)
-        
-        #mesh_transform, _ = trimesh.registration.mesh_other(sdfusion_box_mesh, panoptic_box_mesh, scale=True, icp_first=50, icp_final=200, sample=1000)
-        #mesh_transform[0:3, 0:3] = mesh_transform[0:3, 0:3] * ~np.eye(3).astype(bool) + np.eye(3) # only translate - rotation currently doens't really work
-        instance_sdfusion_mesh.apply_transform(mesh_transform)
-        instance_sdfusion_mesh.visual.face_colors = instance_color
+        # align distance from floor  
+        instance_sdfusion_mesh.vertices -= instance_sdfusion_mesh.vertices[:, 1].min() - instance_panoptic_mesh.vertices[:, 1].min()
         
         # Remove panoptic instance and insert sdfusion instance
         panoptic_mesh.update_faces(~face_mask)
         panoptic_mesh.remove_unreferenced_vertices()
-        panoptic_mesh = trimesh.util.concatenate(panoptic_mesh, instance_sdfusion_mesh)
+        panoptic_mesh = trimesh.util.concatenate(panoptic_mesh + instance_sdfusion_mesh)
         
+    panoptic_mesh.remove_duplicate_faces()
+    panoptic_mesh.remove_unreferenced_vertices()
+    trimesh.repair.fill_holes(panoptic_mesh)
+    
+    #panoptic_mesh = clean_floor(panoptic_mesh)
+    
     panoptic_mesh.export(output_path / 'mesh_joined_instances.ply')
+    
+    
+def align_object_rotation_and_scaling(source, target):
+    steps = 64
+    step_angle = 2*math.pi / steps
+    direction = [0, 1, 0]
+    center = source.centroid
+    
+    number_of_points = 5000
+    
+    simplified_source = trimesh.points.PointCloud(trimesh.sample.sample_surface(source, number_of_points)[0])
+    simplified_target = trimesh.points.PointCloud(trimesh.sample.sample_surface(target, number_of_points)[0])
+    
+    # TODO: Use axis aligned bounding box center rather than centroid
+    
+    best_angle, best_angle_dist, best_scaling = 0, math.inf, 1
+    
+    for i in range(steps):
+        # rotate target here because we know source is aligned with axis for bounding box
+        rotated_target = simplified_target.copy()
         
-
+        # rotation
+        rotation_matrix = trimesh.transformations.rotation_matrix(step_angle*i, direction, center)
+        rotated_target.apply_transform(rotation_matrix)
+        
+        # scaling
+        rotated_target.vertices -= center
+        scaling = simplified_source.bounding_box.extents/rotated_target.bounding_box.extents
+        rotated_target.vertices *= scaling
+        rotated_target.vertices += center
+        
+        # find distance
+        with torch.no_grad():
+            distance = chamfer_distance(torch.tensor(simplified_source.vertices, dtype=torch.float32).unsqueeze(0), torch.tensor(rotated_target.vertices, dtype=torch.float32).unsqueeze(0))[0].numpy()
+        
+        if distance < best_angle_dist:
+            best_angle = step_angle*i
+            best_angle_dist = distance
+            best_scaling = 1. / scaling
             
+    # transform source
+    source = source.copy()
+    
+    # scale
+    source.vertices -= center
+    source.vertices *= 0.9 * best_scaling
+    source.vertices += center
+    
+    # rotate 
+    rotation_matrix = trimesh.transformations.rotation_matrix(-best_angle, direction, center)
+    source.apply_transform(rotation_matrix)
+    
+    return source
+    
+def align_mesh_with_floor_axis(mesh, output_path):
+    colors = create_color_palette()
+    floor_color = list(colors[2]) + [255] # floor
+    face_mask = (mesh.visual.face_colors == floor_color).all(axis=1)
+    floor_mesh = mesh.copy()
+    floor_mesh.update_faces(face_mask)
+    
+    floor_axis = trimesh.primitives.Box(extents=[1, 0, 1])
+
+    transformation = align_meshes(floor_mesh, floor_axis)
+    draw_registration_result(floor_mesh, floor_axis, transformation, output_path)
+    
+    return transformation
+
+def align_meshes(source, target):
+    o3d_floor_points = trimesh_to_open3d_point_cloud(source)
+    o3d_floor_axis_points = trimesh_to_open3d_point_cloud(target)
+    
+    init_transform = np.eye(4)
+    init_transform[:3, 3] = target.centroid-source.centroid
+    
+    icp_coarse = open3d.pipelines.registration.registration_icp(
+        o3d_floor_points, o3d_floor_axis_points, max_correspondence_distance=5.0,
+        init=init_transform,
+        estimation_method=open3d.pipelines.registration.TransformationEstimationPointToPoint(),
+        criteria=open3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=2000)
+    )
+    
+    coarse_transformation = np.array(icp_coarse.transformation)
+    coarse_transformation[:3,:3] = np.eye(3)
+    
+    icp_fine = open3d.pipelines.registration.registration_icp(
+        o3d_floor_points, o3d_floor_axis_points, max_correspondence_distance=1.0,
+        init=coarse_transformation,
+        estimation_method=open3d.pipelines.registration.TransformationEstimationPointToPoint(),
+        criteria=open3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=2000)
+    )
+    
+    return icp_fine.transformation
+    
+def draw_registration_result(source, target, transformation, output_path):
+    before_mesh = trimesh.util.concatenate([source, target])
+    before_mesh.export(output_path / "axis_align_before.ply")
+    
+    source.apply_transform(transformation)
+    
+    after_mesh = trimesh.util.concatenate([source, target])
+    after_mesh.export(output_path / "axis_align_after.ply") 
+
+def trimesh_to_open3d_point_cloud(trimesh_mesh):
+    vertices = open3d.utility.Vector3dVector(np.array(trimesh_mesh.vertices))
+    faces = open3d.utility.Vector3iVector(np.array(trimesh_mesh.faces))
+    o3d_mesh = open3d.geometry.TriangleMesh(vertices, faces)
+    return o3d_mesh.sample_points_uniformly(1000)
+            
+def clean_floor(mesh):
+    colors = create_color_palette()
+    floor_color = list(colors[2]) + [255]
+    wall_color = list(colors[1]) + [255]
+
+    floor_face_mask = (mesh.visual.face_colors == floor_color).all(axis=1)
+    wall_face_mask = (mesh.visual.face_colors == wall_color).all(axis=1)
+    
+    floor_mesh = mesh.copy()
+    floor_mesh.update_faces(floor_face_mask)
+    floor_mesh.remove_unreferenced_vertices()
+    
+    cleaned_mesh = mesh.copy()
+    cleaned_mesh.update_faces(~floor_face_mask)
+    cleaned_mesh.remove_unreferenced_vertices()
+    
+    return trimesh.util.concatenate([
+        cleaned_mesh, 
+        floor_mesh.bounding_box_oriented,
+        #wall_mesh.bounding_box_oriented
+    ])
+    
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", "-i", type=str, default="data/front3d-sample/rgb_0007.png")
     parser.add_argument("--output", "-o", type=str, default="output/sample_0007/")
+    parser.add_argument("--testins", "-io", type=str, nargs='*', default=None)
+    parser.add_argument("--sdfusion", "-sf", type=str, default='sdfusion-mm2shape')
     parser.add_argument("--config-file", "-c", type=str, default="configs/front3d_sample.yaml")
     parser.add_argument("--model", "-m", type=str, default="data/panoptic_front3d_v2.pth")
     parser.add_argument("opts", default=None, nargs=argparse.REMAINDER)
 
     args = parser.parse_args()
 
-    main(args)
+    if args.testins:
+        for test_input in args.testins:
+            args.input = f'data/front3d/{test_input}.png'
+            args.output = f'outputs/{args.sdfusion}/{test_input}'
+
+            main(args)
+    else:
+        main(args)
+    
